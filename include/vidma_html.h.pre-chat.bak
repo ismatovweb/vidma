@@ -178,106 +178,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         .stars span { color: #555; transition: color 0.2s; }
         .stars span.active, .stars span:hover { color: #f59e0b; }
         .modal button { margin-top: 20px; padding: 10px 24px; border-radius: 30px; border: none; background: #7c3aed; color: white; font-weight: 600; cursor: pointer; }
-    
-/* === Sprint 3: chat === */
-.control-btn.chat { position: relative; }
-.control-btn.chat .badge {
-    position: absolute; top: -4px; right: -4px;
-    background: #e11d48; color: #fff;
-    font-size: 0.7rem; font-weight: 700;
-    min-width: 18px; height: 18px; line-height: 18px;
-    border-radius: 9px; padding: 0 5px;
-    display: none;
-}
-.control-btn.chat.has-unread .badge { display: block; }
-.control-btn.chat.has-unread { animation: chat-pulse 1.6s ease-in-out infinite; }
-@keyframes chat-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(225,29,72,0.55); }
-    50%      { box-shadow: 0 0 0 6px rgba(225,29,72,0); }
-}
-.chat-time {
-    display: block;
-    font-size: 0.65rem;
-    opacity: 0.7;
-    margin-top: 3px;
-    text-align: right;
-    font-weight: 500;
-}
-.chat-msg.mine .chat-time { color: rgba(255,255,255,0.75); }
-.chat-msg.theirs .chat-time { color: #888; }
-
-#chat-panel {
-    position: fixed; top: 0; right: 0; bottom: 0;
-    width: 340px; max-width: 90vw;
-    background: #16161f;
-    border-left: 1px solid rgba(255,255,255,0.08);
-    display: flex; flex-direction: column;
-    z-index: 50;
-    transform: translateX(100%);
-    transition: transform 0.2s ease;
-}
-#chat-panel.open { transform: translateX(0); }
-
-#chat-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
-    font-weight: 600; color: #e0e0e0;
-}
-#chat-header .close-chat {
-    background: none; border: none; color: #aaa;
-    font-size: 1.2rem; cursor: pointer; padding: 4px 8px;
-}
-#chat-messages {
-    flex: 1; overflow-y: auto; padding: 12px;
-    display: flex; flex-direction: column; gap: 8px;
-}
-.chat-msg {
-    max-width: 85%; padding: 8px 12px;
-    border-radius: 14px;
-    font-size: 0.9rem; line-height: 1.35;
-    word-wrap: break-word; white-space: pre-wrap;
-}
-.chat-msg .chat-author {
-    display: block; font-size: 0.72rem; color: #a78bfa;
-    margin-bottom: 3px; font-weight: 600;
-}
-.chat-msg.mine {
-    background: #7c3aed; color: #fff;
-    align-self: flex-end; border-bottom-right-radius: 4px;
-}
-.chat-msg.mine .chat-author { color: #ddd6fe; }
-.chat-msg.theirs {
-    background: #2a2a3a; color: #e0e0e0;
-    align-self: flex-start; border-bottom-left-radius: 4px;
-}
-.chat-msg.system {
-    align-self: center; background: transparent;
-    color: #888; font-style: italic; font-size: 0.8rem;
-    max-width: 100%; text-align: center;
-}
-#chat-form {
-    display: flex; gap: 8px; padding: 12px;
-    border-top: 1px solid rgba(255,255,255,0.08);
-    background: #1a1a24;
-}
-#chat-input {
-    flex: 1; background: #23232f; border: 1px solid #333;
-    color: #fff; padding: 10px 14px; border-radius: 22px;
-    outline: none; font-size: 0.9rem; font-family: inherit;
-}
-#chat-input:focus { border-color: #7c3aed; }
-#chat-send {
-    background: #7c3aed; border: none; color: #fff;
-    padding: 0 16px; border-radius: 22px;
-    font-weight: 600; cursor: pointer;
-}
-#chat-send:disabled { background: #444; cursor: not-allowed; }
-#chat-empty {
-    color: #666; text-align: center; padding: 30px 16px;
-    font-size: 0.85rem; font-style: italic;
-}
-
-</style>
+    </style>
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -354,21 +255,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             <div class="video-label">Камера</div>
             <video id="local-camera-video" autoplay playsinline muted></video>
         </div>
-        <div id="chat-panel">
-        <div id="chat-header">
-            <span>Чат комнаты</span>
-            <button class="close-chat" onclick="toggleChatPanel()" title="Закрыть">✕</button>
-        </div>
-        <div id="chat-messages">
-            <div id="chat-empty">История чата видна только вам и хранится в этом браузере.</div>
-        </div>
-        <form id="chat-form" onsubmit="handleChatSubmit(event)">
-            <input type="text" id="chat-input" placeholder="Сообщение..." maxlength="500" autocomplete="off">
-            <button type="submit" id="chat-send">→</button>
-        </form>
-    </div>
-    
-    <div class="controls">
+        <div class="controls">
             <button class="control-btn" id="toggle-mic" onclick="toggleMic()">
                 <svg id="mic-icon-on" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                 <svg id="mic-icon-off" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
@@ -379,10 +266,6 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             </button>
             <button class="control-btn screen-share" id="toggle-screen" onclick="toggleScreenShare()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            </button>
-            <button class="control-btn chat" id="toggle-chat" onclick="toggleChatPanel()" title="Чат">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <span class="badge" id="chat-badge">0</span>
             </button>
             <button class="control-btn danger" onclick="leaveCall()">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>

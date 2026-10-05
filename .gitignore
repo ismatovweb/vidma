@@ -25,3 +25,4 @@ vidma_events.log
 *.db
 *.sqlite
 *.sqlite3
+*.pre-polish.bak

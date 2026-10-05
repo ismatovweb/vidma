@@ -220,19 +220,11 @@ function onLocalTrackPublished(publication) {
 }
 
 function onDataReceived(payload, participant, kind, topic) {
-    console.log('[chat] DataReceived:', {
-        payloadSize: payload ? payload.byteLength : 0,
-        from: participant ? participant.identity : '(self)',
-        kind, topic
-    });
     try {
         const text = new TextDecoder().decode(payload);
-        console.log('[chat] decoded:', text);
         const msg = JSON.parse(text);
         if (msg.type === 'chat') {
             appendChatMessage(participant ? participant.identity : 'unknown', msg.text);
-        } else {
-            console.warn('[chat] not a chat message:', msg);
         }
     } catch (e) { console.warn('Bad datachannel payload:', e); }
 }
@@ -353,196 +345,25 @@ function leaveCallUI() {
     document.getElementById('main-screen').style.display = 'block';
 }
 
-
-// =====================================================================
-// Sprint 3 — Chat via LiveKit DataChannel (E2EE, no server storage)
-// =====================================================================
-const CHAT_TOPIC = 'vidma-chat';
-let chatOpen = false;
-let chatUnread = 0;
-const chatHistory = new Map(); // roomId -> [{sender, text, ts, mine}]
-
-function chatStorageKey(roomId) { return 'vidma-chat-' + roomId; }
-
-function loadChatHistory(roomId) {
-    if (!roomId) return [];
-    if (chatHistory.has(roomId)) return chatHistory.get(roomId);
-    try {
-        const raw = localStorage.getItem(chatStorageKey(roomId));
-        const arr = raw ? JSON.parse(raw) : [];
-        chatHistory.set(roomId, arr);
-        return arr;
-    } catch (e) {
-        chatHistory.set(roomId, []);
-        return [];
-    }
-}
-
-function saveChatHistory(roomId, msgs) {
-    if (!roomId) return;
-    chatHistory.set(roomId, msgs);
-    try { localStorage.setItem(chatStorageKey(roomId), JSON.stringify(msgs)); }
-    catch (e) { console.warn('chat save failed', e); }
-}
-
-function formatChatTime(ts) {
-    const d = new Date(ts || Date.now());
-    const hh = String(d.getHours()).padStart(2, '0');
-    const mm = String(d.getMinutes()).padStart(2, '0');
-    return hh + ':' + mm;
-}
-
-function renderChatMessage(msg) {
-    const box = document.getElementById('chat-messages');
-    if (!box) return;
-    const empty = document.getElementById('chat-empty');
-    if (empty) empty.remove();
-
-    const el = document.createElement('div');
-    el.className = 'chat-msg ' + (msg.system ? 'system' : (msg.mine ? 'mine' : 'theirs'));
-    if (!msg.system) {
-        const a = document.createElement('span');
-        a.className = 'chat-author';
-        a.textContent = msg.mine ? 'Вы' : (msg.sender || 'Участник');
-        el.appendChild(a);
-    }
-    const textNode = document.createTextNode(msg.text);
-    el.appendChild(textNode);
-    if (!msg.system) {
-        const t = document.createElement('span');
-        t.className = 'chat-time';
-        t.textContent = formatChatTime(msg.ts);
-        el.appendChild(t);
-    }
-    box.appendChild(el);
-    box.scrollTop = box.scrollHeight;
-}
-
-function renderChatHistory(roomId) {
-    const box = document.getElementById('chat-messages');
-    if (!box) return;
-    box.innerHTML = '';
-    const msgs = loadChatHistory(roomId);
-    if (msgs.length === 0) {
-        const e = document.createElement('div');
-        e.id = 'chat-empty';
-        e.textContent = 'История чата видна только вам и хранится в этом браузере.';
-        box.appendChild(e);
-        return;
-    }
-    msgs.forEach(renderChatMessage);
-}
-
+// ---------------------------------------------------------------------
+// chat via DataChannel (used in Sprint 3)
+// ---------------------------------------------------------------------
 function appendChatMessage(from, text) {
-    // from === currentSessionId → mine; else theirs
-    const isMine = (from === currentSessionId);
-    const msg = {
-        sender: isMine ? null : (room?.remoteParticipants?.get?.(from)?.name || from),
-        text: String(text).slice(0, 500),
-        ts: Date.now(),
-        mine: isMine
-    };
-    const arr = loadChatHistory(currentRoomId);
-    arr.push(msg);
-    if (arr.length > 500) arr.splice(0, arr.length - 500);
-    saveChatHistory(currentRoomId, arr);
-
-    renderChatMessage(msg);
-
-    if (!chatOpen && !isMine) {
-        chatUnread++;
-        updateChatBadge();
-        playChatPing();
-        showToast('Новое сообщение в чате');
-    }
-}
-
-let __chatAudioCtx = null;
-function playChatPing() {
-    try {
-        if (!__chatAudioCtx) {
-            __chatAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        const ctx = __chatAudioCtx;
-        if (ctx.state === 'suspended') ctx.resume();
-        const t0 = ctx.currentTime;
-        // Мягкий "блип" из двух коротких тонов
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, t0);
-        osc.frequency.setValueAtTime(1175, t0 + 0.08);
-        gain.gain.setValueAtTime(0.0001, t0);
-        gain.gain.exponentialRampToValueAtTime(0.15, t0 + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
-        osc.connect(gain).connect(ctx.destination);
-        osc.start(t0);
-        osc.stop(t0 + 0.25);
-    } catch (e) { /* тихо игнорируем */ }
-}
-
-function updateChatBadge() {
-    const badge = document.getElementById('chat-badge');
-    const btn = document.getElementById('toggle-chat');
-    if (!badge || !btn) return;
-    if (chatUnread > 0) {
-        badge.textContent = chatUnread > 99 ? '99+' : String(chatUnread);
-        btn.classList.add('has-unread');
-    } else {
-        badge.textContent = '0';
-        btn.classList.remove('has-unread');
-    }
-}
-
-function toggleChatPanel() {
-    chatOpen = !chatOpen;
-    const panel = document.getElementById('chat-panel');
-    if (panel) panel.classList.toggle('open', chatOpen);
-    if (chatOpen) {
-        chatUnread = 0;
-        updateChatBadge();
-        renderChatHistory(currentRoomId);
-        setTimeout(() => document.getElementById('chat-input')?.focus(), 50);
-    }
-}
-
-function handleChatSubmit(ev) {
-    ev.preventDefault();
-    const input = document.getElementById('chat-input');
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
-    sendChatMessage(text).then(() => {
-        input.value = '';
-    }).catch(e => {
-        console.warn('send failed', e);
-        showToast('Не удалось отправить сообщение');
-    });
+    // placeholder; UI added in Sprint 3
+    console.log('[chat]', from, text);
 }
 
 async function sendChatMessage(text) {
-    if (!room || !text) { console.warn('[chat] sendChatMessage: no room or text'); return; }
-    if (!room.localParticipant || !room.localParticipant.publishData) {
-        console.warn('[chat] publishData not available'); return;
-    }
-    const payload = new TextEncoder().encode(JSON.stringify({
-        type: 'chat', text: String(text).slice(0, 500)
-    }));
-    console.log('[chat] publishData: size=', payload.byteLength, 'topic=', CHAT_TOPIC);
+    if (!room || !text) return;
+    const payload = new TextEncoder().encode(JSON.stringify({ type: 'chat', text }));
     try {
-        await room.localParticipant.publishData(payload, {
-            reliable: true,
-            topic: CHAT_TOPIC
-        });
-        console.log('[chat] publishData: OK');
-    } catch (e) {
-        console.error('[chat] publishData FAILED:', e);
-        showToast('Не удалось отправить');
-        throw e;
-    }
-    appendChatMessage(currentSessionId, text);
+        await room.localParticipant.publishData(payload, { reliable: true });
+    } catch (e) { console.warn('sendChatMessage failed:', e); }
 }
 
+// ---------------------------------------------------------------------
+// rating modal
+// ---------------------------------------------------------------------
 function showRatingModal() {
     const modal = document.getElementById('rating-modal');
     if (!modal) return;
@@ -604,20 +425,6 @@ async function joinWithoutCamera() {
 // URL ?room= auto-fill
 // ---------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
-    // Разбудить AudioContext при первом клике — политика браузера
-    const resumeAudio = () => {
-        try {
-            if (!__chatAudioCtx) {
-                __chatAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (__chatAudioCtx.state === 'suspended') __chatAudioCtx.resume();
-        } catch (e) {}
-        document.removeEventListener('click', resumeAudio);
-        document.removeEventListener('touchstart', resumeAudio);
-    };
-    document.addEventListener('click', resumeAudio);
-    document.addEventListener('touchstart', resumeAudio);
-
     const inp = document.getElementById('room-id');
     if (!inp) return;
 
@@ -660,8 +467,6 @@ window.closeRating = closeRating;
 window.retryCamera = retryCamera;
 window.joinWithoutCamera = joinWithoutCamera;
 window.shareRoomFromCall = copyRoomLink;
-window.toggleChatPanel = toggleChatPanel;
-window.handleChatSubmit = handleChatSubmit;
 )js";
 
 #endif // VIDMA_JS_H

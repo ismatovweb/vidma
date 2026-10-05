@@ -115,7 +115,8 @@ private:
                 {"room", roomId},
                 {"roomJoin", true},
                 {"canPublish", true},
-                {"canSubscribe", true}
+                {"canSubscribe", true},
+                {"canPublishData", true}
             }}
         };
         std::string p = base64UrlEncode(payload.dump());
