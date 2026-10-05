@@ -458,9 +458,12 @@ private:
                             sessions_[sessionId] = &ws;
                         }
 
-                        logEvent("join room=" + roomId + " sid=" + sessionId +
-                                 " ip=" + clientIpHash(req) +
-                                 " name_len=" + std::to_string(name.size()));
+                        std::string safeName = name;
+                        for (auto& c : safeName) {
+                            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=') c = '_';
+                        }
+                        if (safeName.size() > 32) safeName = safeName.substr(0, 32);
+                        logEvent("join room=" + roomId + " sid=" + sessionId + " name=" + safeName);
 
                         json joinedMsg;
                         joinedMsg["type"]             = "joined";
@@ -497,7 +500,12 @@ private:
             }
 
             if (joined) {
-                logEvent("leave room=" + roomId + " sid=" + sessionId);
+                std::string safeName = name;
+                for (auto& c : safeName) {
+                    if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=') c = '_';
+                }
+                if (safeName.size() > 32) safeName = safeName.substr(0, 32);
+                logEvent("leave room=" + roomId + " sid=" + sessionId + " name=" + safeName);
                 roomManager_.removeParticipant(roomId, sessionId);
 
                 json left;

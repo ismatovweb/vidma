@@ -33,3 +33,8 @@ vidma_events.log
 *.pre-polish.bak
 *.sprint0.bak
 *.pre-beta.bak
+
+# Monitoring state
+*.offset
+vidma-events.log
+vidma-monitor.log
