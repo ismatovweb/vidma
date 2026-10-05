@@ -2,8 +2,8 @@
 #define SERVER_H
 
 #include "RoomManager.h"
-#include "include/httplib.h"
-#include "include/json.hpp"
+#include <httplib.h>
+#include <json.hpp>
 #include "include/vidma_html.h"
 #include "include/vidma_js.h"
 
