@@ -353,6 +353,73 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 .remote-video-wrapper.showing-screen { border: 2px solid #8b5cf6; }
 .remote-video-wrapper.showing-screen video { object-fit: contain; }
 
+
+/* === Active speaker glow === */
+.remote-video-wrapper.speaking,
+#local-video-container.speaking {
+    box-shadow: 0 0 calc(14px + var(--speak-glow, 0) * 20px)
+                rgba(139, 92, 246, calc(0.25 + var(--speak-glow, 0) * 0.55)),
+                0 0 0 calc(1px + var(--speak-glow, 0) * 3px)
+                rgba(167, 139, 250, calc(0.4 + var(--speak-glow, 0) * 0.6));
+    transition: box-shadow 0.15s ease-out;
+}
+.remote-video-wrapper { transition: box-shadow 0.15s ease-out; }
+#local-video-container { transition: box-shadow 0.15s ease-out; }
+
+/* === Avatar overlay (camera off) === */
+.video-avatar {
+    position: absolute; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at center, #26263a 0%, #15151f 100%);
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+.video-avatar.visible { display: flex; opacity: 1; }
+.video-avatar .avatar-circle {
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 3rem; font-weight: 700; color: #fff;
+    letter-spacing: -0.02em;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    box-shadow:
+        0 12px 32px rgba(0,0,0,0.45),
+        0 0 0 3px rgba(255,255,255,0.12),
+        inset 0 2px 8px rgba(255,255,255,0.15),
+        inset 0 -6px 14px rgba(0,0,0,0.25);
+    user-select: none;
+    position: relative;
+    overflow: hidden;
+}
+.video-avatar .avatar-circle::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(circle at 30% 20%, rgba(255,255,255,0.22), transparent 55%);
+    pointer-events: none;
+}
+.video-avatar .avatar-circle svg {
+    width: 56px; height: 56px;
+    stroke: rgba(255,255,255,0.92);
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+/* Локальное превью — уменьшенная версия */
+#local-video-container .video-avatar .avatar-circle {
+    width: 68px; height: 68px; font-size: 1.9rem;
+}
+#local-video-container .video-avatar .avatar-circle svg {
+    width: 34px; height: 34px;
+}
+#local-camera-container .video-avatar { display: none !important; }
+@media (max-width: 600px) {
+    .video-avatar .avatar-circle { width: 80px; height: 80px; font-size: 2.2rem; }
+    .video-avatar .avatar-circle svg { width: 42px; height: 42px; }
+}
+    .video-avatar .avatar-circle svg { width: 40px; height: 40px; }
+}
+
 </style>
     <script type="application/ld+json">
     {
@@ -468,6 +535,9 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         </div>
         <div id="local-video-container">
             <div class="video-label" id="local-video-label">Вы</div>
+            <div class="video-avatar" id="local-video-avatar">
+                <div class="avatar-circle" id="local-avatar-circle"></div>
+            </div>
             <video id="local-video" autoplay playsinline muted></video>
         </div>
         <div id="local-camera-container">

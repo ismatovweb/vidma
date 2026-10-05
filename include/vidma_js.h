@@ -45,6 +45,7 @@ function setLocalVideoLabel(txt) {
 // ---------------------------------------------------------------------
 async function createRoom() {
     let name = (document.getElementById('create-name')?.value || '').trim() || 'Гость';
+    console.log('[createRoom] name =', name);
     try {
         const res = await fetch('/api/room/create', {
             method: 'POST',
@@ -71,11 +72,15 @@ function copyRoomLink() {
 }
 
 function joinCreatedRoom() {
+    const freshName = (document.getElementById('create-name')?.value || '').trim();
+    if (freshName) currentName = freshName;
+    console.log('[joinCreatedRoom]', { currentRoomId: currentRoomId, currentName: currentName });
     if (currentRoomId && currentName) joinRoomById(currentRoomId, currentName);
 }
 
 async function joinRoom() {
     let name = (document.getElementById('join-name')?.value || '').trim() || 'Гость';
+    console.log('[joinRoom] name =', name);
     let raw = (document.getElementById('room-id')?.value || '').trim();
     const digits = raw.replace(/\D/g, '');
     if (digits.length !== 9) { alert('Введите 9 цифр кода комнаты'); return; }
@@ -105,6 +110,20 @@ const lobbyState = {
     micEnabled: true,
     camEnabled: true,
 };
+
+function resolveName(preferredName) {
+    if (preferredName && !isGuestName(preferredName)) return String(preferredName).trim();
+    try {
+        if (typeof currentName !== 'undefined' && currentName && !isGuestName(currentName)) {
+            return String(currentName).trim();
+        }
+    } catch (e) {}
+    const cv = (document.getElementById('create-name')?.value || '').trim();
+    if (cv && !isGuestName(cv)) return cv;
+    const jv = (document.getElementById('join-name')?.value || '').trim();
+    if (jv && !isGuestName(jv)) return jv;
+    return 'Гость';
+}
 
 function showLobby(roomId, name) {
     currentRoomId = roomId;
@@ -317,6 +336,10 @@ async function confirmLobbyEntry() {
 // Real connection (uses already-obtained stream from lobby)
 // =====================================================================
 async function connectToRoom(preStream) {
+    // Re-resolve name defensively before fetching token
+    currentName = resolveName(currentName);
+    console.log('[connectToRoom] name =', currentName);
+
     // 1. Get token from server
     let data;
     try {
@@ -329,6 +352,13 @@ async function connectToRoom(preStream) {
         if (!data.livekitUrl || !data.livekitToken) {
             throw new Error('Server did not return livekit config');
         }
+        // Log JWT payload to verify name made it into the token
+        try {
+            const parts = data.livekitToken.split('.');
+            const pad = '='.repeat((4 - parts[1].length % 4) % 4);
+            const payload = JSON.parse(atob((parts[1] + pad).replace(/-/g, '+').replace(/_/g, '/')));
+            console.log('[JWT payload]', payload);
+        } catch (e) {}
     } catch (e) {
         alert('Не удалось получить токен: ' + e.message);
         leaveCall();
@@ -367,7 +397,10 @@ async function connectToRoom(preStream) {
         .on(RoomEvent.ParticipantDisconnected, onParticipantDisconnected)
         .on(RoomEvent.TrackSubscribed, onTrackSubscribed)
         .on(RoomEvent.TrackUnsubscribed, onTrackUnsubscribed)
+        .on(RoomEvent.TrackPublished, onTrackPublished)
+        .on(RoomEvent.TrackUnpublished, onTrackUnpublished)
         .on(RoomEvent.LocalTrackPublished, onLocalTrackPublished)
+        .on(RoomEvent.LocalTrackUnpublished, onLocalTrackUnpublished)
         .on(RoomEvent.DataReceived, onDataReceived);
 
     // 4. Connect
@@ -437,11 +470,22 @@ async function connectToRoom(preStream) {
         }
     }
 
-    // 6. Attach local video
+    // 6. Attach local video + avatar
     const camPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+    const localBox = document.getElementById('local-video-container');
+    const localAv = document.getElementById('local-video-avatar');
     if (camPub && camPub.videoTrack) {
         camPub.videoTrack.attach(document.getElementById('local-video'));
+        if (localAv) localAv.classList.remove('visible');
+    } else {
+        if (localAv) {
+            console.log('[local-avatar-toggle]', { currentName: currentName, isGuest: isGuestName(currentName) });
+            renderAvatarInto(localAv, currentName || '', isGuestName(currentName));
+            localAv.classList.add('visible');
+        }
     }
+    // Подсветка для себя
+    if (localBox) startSpeakerGlow(room.localParticipant, localBox);
 
     // 7. Attach already-present remote participants
     room.remoteParticipants.forEach(p => attachParticipant(p));
@@ -465,7 +509,7 @@ function onDisconnected(reason) {
 }
 
 function onParticipantConnected(participant) {
-    console.log('Participant joined:', participant.identity);
+    console.log('Participant joined:', participant.identity, 'name:', participant.name);
     attachParticipant(participant);
 }
 
@@ -480,17 +524,42 @@ function onTrackSubscribed(track, publication, participant) {
 }
 
 function onTrackUnsubscribed(track, publication, participant) {
-    console.log('Track unsubscribed:', participant.identity, track.kind);
-    // If video track removed, panel may be empty. Keep it, update if needed.
-    const panel = remotePanels.get(participant.identity);
-    if (panel && track.kind === 'video' && publication.source === Track.Source.Camera) {
-        if (panel.videoEl) panel.videoEl.srcObject = null;
+    console.log('Track unsubscribed:', participant.identity, track.kind, publication.source);
+    if (track.kind === 'video') {
+        const panel = remotePanels.get(participant.identity);
+        if (panel && panel.videoEl) panel.videoEl.srcObject = null;
+    }
+    attachParticipant(participant);
+}
+
+function onTrackPublished(publication, participant) {
+    console.log('Track published:', participant.identity, publication.kind, publication.source);
+    attachParticipant(participant);
+}
+
+function onTrackUnpublished(publication, participant) {
+    console.log('Track unpublished:', participant.identity, publication.kind, publication.source);
+    attachParticipant(participant);
+}
+
+function onLocalTrackUnpublished(publication) {
+    if (publication.source === Track.Source.Camera) {
+        const localAv = document.getElementById('local-video-avatar');
+        if (localAv) {
+            console.log('[local-unpub]', { currentName: currentName });
+            renderAvatarInto(localAv, currentName || '', isGuestName(currentName));
+            localAv.classList.add('visible');
+        }
+        const lv = document.getElementById('local-video');
+        if (lv) lv.srcObject = null;
     }
 }
 
 function onLocalTrackPublished(publication) {
     if (publication.source === Track.Source.Camera && publication.videoTrack) {
         publication.videoTrack.attach(document.getElementById('local-video'));
+        const localAv = document.getElementById('local-video-avatar');
+        if (localAv) localAv.classList.remove('visible');
     }
 }
 
@@ -573,6 +642,115 @@ function attachDoubleTapFullscreen(el) {
     }, { passive: false });
 }
 
+// =====================================================================
+// Avatar (camera off) + Active speaker glow
+// =====================================================================
+const AVATAR_GRADIENTS = [
+    ['#8b5cf6', '#d946ef'],   // violet → fuchsia
+    ['#6366f1', '#a855f7'],   // indigo → violet
+    ['#a855f7', '#ec4899'],   // purple → pink
+    ['#7c3aed', '#06b6d4'],   // violet → cyan
+    ['#8b5cf6', '#f59e0b'],   // purple → amber
+    ['#d946ef', '#3b82f6'],   // fuchsia → blue
+    ['#10b981', '#06b6d4'],   // emerald → cyan
+    ['#f43f5e', '#8b5cf6'],   // rose → violet
+    ['#0ea5e9', '#6366f1'],   // sky → indigo
+    ['#14b8a6', '#8b5cf6'],   // teal → violet
+];
+function hashString(s) {
+    let h = 5381;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) + h) ^ s.charCodeAt(i);
+    return Math.abs(h);
+}
+function avatarGradient(name) {
+    const g = AVATAR_GRADIENTS[hashString(name || 'guest') % AVATAR_GRADIENTS.length];
+    return 'linear-gradient(135deg, ' + g[0] + ' 0%, ' + g[1] + ' 100%)';
+}
+function guestSvg() {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+         + '<circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 0 0-16 0"/></svg>';
+}
+
+function isGuestName(name) {
+    if (name === undefined || name === null) return true;
+    const t = String(name).trim();
+    if (t === '') return true;
+    const low = t.toLowerCase();
+    if (low === 'гость' || low === 'guest' || low === 'гость ') return true;
+    // Если первый символ не буква (цифра, знак) — тоже гость
+    const first = t.charAt(0);
+    if (!/[\p{L}]/u.test(first)) return true;
+    return false;
+}
+
+function renderAvatarInto(container, name, forceGuest) {
+    if (!container) return;
+    const circle = container.querySelector('.avatar-circle');
+    if (!circle) return;
+
+    const guest = forceGuest || isGuestName(name);
+    console.log('[avatar]', { name: name, forceGuest: forceGuest, isGuest: guest });
+
+    if (guest) {
+        circle.innerHTML = guestSvg();
+        circle.style.background =
+            'linear-gradient(135deg, #64748b 0%, #475569 60%, #334155 100%)';
+    } else {
+        const letter = String(name).trim().charAt(0).toUpperCase();
+        while (circle.firstChild) circle.removeChild(circle.firstChild);
+        circle.appendChild(document.createTextNode(letter));
+        circle.style.background = avatarGradient(name);
+    }
+}
+
+function ensureAvatarEl(wrapper, idSuffix) {
+    let av = wrapper.querySelector('.video-avatar');
+    if (!av) {
+        av = document.createElement('div');
+        av.className = 'video-avatar';
+        av.innerHTML = '<div class="avatar-circle"></div>';
+        // вставляем перед <video> чтобы был под ним в DOM, но выше по z-index
+        wrapper.insertBefore(av, wrapper.firstChild);
+    }
+    return av;
+}
+
+function setAvatarVisible(wrapper, visible) {
+    const av = wrapper.querySelector('.video-avatar');
+    if (!av) return;
+    av.classList.toggle('visible', visible);
+}
+
+// ---- Active speaker glow ----
+const speakGlowTimers = new Map(); // identity -> raf id
+
+function applyGlow(wrapper, level) {
+    if (!wrapper) return;
+    // level: 0..1
+    const lv = Math.max(0, Math.min(1, level));
+    wrapper.style.setProperty('--speak-glow', lv.toFixed(3));
+    wrapper.classList.toggle('speaking', lv > 0.02);
+}
+
+function startSpeakerGlow(participant, wrapper) {
+    stopSpeakerGlow(participant.identity);
+    const loop = () => {
+        const level = typeof participant.audioLevel === 'number' ? participant.audioLevel : 0;
+        applyGlow(wrapper, level * 1.6); // усиливаем для заметности
+        const id = speakGlowTimers.get(participant.identity);
+        if (id !== false) {
+            speakGlowTimers.set(participant.identity, requestAnimationFrame(loop));
+        }
+    };
+    speakGlowTimers.set(participant.identity, requestAnimationFrame(loop));
+}
+
+function stopSpeakerGlow(identity) {
+    const id = speakGlowTimers.get(identity);
+    if (id) cancelAnimationFrame(id);
+    speakGlowTimers.delete(identity);
+}
+
 function attachParticipant(participant) {
     const id = participant.identity;
     const label = participant.name || id.slice(0, 6);
@@ -598,19 +776,31 @@ function attachParticipant(participant) {
         fsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
         fsBtn.onclick = (e) => { e.stopPropagation(); toggleFullscreen(wrapper); };
 
+        // Аватар (для camera off)
+        const av = document.createElement('div');
+        av.className = 'video-avatar';
+        av.innerHTML = '<div class="avatar-circle"></div>';
+        renderAvatarInto(av, participant.name || '', isGuestName(participant.name));
+
+        wrapper.appendChild(av);
         wrapper.appendChild(video);
         wrapper.appendChild(lbl);
         wrapper.appendChild(fsBtn);
         attachDoubleTapFullscreen(wrapper);
         document.getElementById('remote-videos-grid').appendChild(wrapper);
 
-        panel = { wrapperEl: wrapper, videoEl: video, labelEl: lbl, stream: new MediaStream() };
+        panel = { wrapperEl: wrapper, videoEl: video, labelEl: lbl, stream: new MediaStream(), name: participant.name || '' };
         remotePanels.set(id, panel);
+        console.log('[panel-create]', { id: id, name: participant.name, stored: panel.name });
+
+        // Запустить подсветку при речи
+        startSpeakerGlow(participant, wrapper);
     }
 
     // Attach all currently subscribed tracks.
     // Screen share has higher priority than camera: if present, replace main video.
     let hasScreenShare = false;
+    let hasCamera = false;
     participant.trackPublications.forEach(pub => {
         if (!pub.isSubscribed || !pub.track) return;
         if (pub.kind === 'audio') {
@@ -629,16 +819,38 @@ function attachParticipant(participant) {
         participant.trackPublications.forEach(pub => {
             if (!pub.isSubscribed || !pub.track) return;
             if (pub.kind === 'video' && pub.source === Track.Source.Camera) {
+                hasCamera = true;
                 pub.track.attach(panel.videoEl);
                 panel.labelEl.textContent = participant.name || id.slice(0,6);
                 panel.wrapperEl.classList.remove('showing-screen');
             }
         });
     }
+
+    // Аватар показываем, если нет НИ камеры, НИ screen share
+    const anyVideo = hasScreenShare || hasCamera;
+    setAvatarVisible(panel.wrapperEl, !anyVideo);
+
+    // Обновляем сохранённое имя, если participant.name пришло (не теряем при unpublish)
+    if (participant.name && participant.name.trim()) {
+        panel.name = participant.name;
+    }
+    const nameForAvatar = panel.name || participant.name || '';
+    console.log('[avatar-update]', {
+        identity: participant.identity,
+        participantName: participant.name,
+        storedName: panel.name,
+        hasCamera: hasCamera,
+        hasScreenShare: hasScreenShare,
+        showAvatar: !anyVideo
+    });
+    const av = panel.wrapperEl.querySelector('.video-avatar');
+    if (av) renderAvatarInto(av, nameForAvatar, isGuestName(nameForAvatar));
 }
 
 function detachParticipant(identity) {
     const panel = remotePanels.get(identity);
+    stopSpeakerGlow(identity);
     if (!panel) return;
     try {
         panel.videoEl.srcObject = null;
@@ -705,6 +917,16 @@ async function toggleCam() {
             camOn.style.display = wasEnabled ? 'none' : '';
             camOff.style.display = wasEnabled ? '' : 'none';
         }
+        // Local avatar: показать если камера выкл
+        const localAv = document.getElementById('local-video-avatar');
+        if (localAv) {
+            if (wasEnabled) {
+                renderAvatarInto(localAv, currentName || '', isGuestName(currentName));
+                localAv.classList.add('visible');
+            } else {
+                localAv.classList.remove('visible');
+            }
+        }
     } catch (e) {
         console.warn('toggleCam failed', e);
     } finally {
@@ -742,6 +964,9 @@ function leaveCall() {
 }
 
 function leaveCallUI() {
+    // Stop all speaker glow loops
+    speakGlowTimers.forEach(id => cancelAnimationFrame(id));
+    speakGlowTimers.clear();
     // stop local preview
     const localVideo = document.getElementById('local-video');
     if (localVideo) localVideo.srcObject = null;

@@ -319,7 +319,8 @@ private:
 
         httpServer_.Post("/api/room/create", [this](const httplib::Request& req, httplib::Response& res) {
             std::string roomId = roomManager_.createRoom();
-            logEvent("room_create id=" + roomId);
+            std::string dbg = "room_create id=" + roomId + " body=" + req.body.substr(0, 200);
+            logEvent(dbg);
 
             json j;
             j["roomId"]          = roomId;
@@ -376,6 +377,7 @@ private:
             std::string identity = generateSecureSessionId();
             std::string token = makeLiveKitJwt(livekitApiKey_, livekitApiSecret_,
                                                roomId, identity, name, 3600);
+            logEvent("token_req room=" + roomId + " name=" + name);
 
             json j;
             j["roomId"]       = roomId;
