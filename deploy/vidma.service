@@ -1,0 +1,19 @@
+[Unit]
+Description=Vidma Video Call Server
+Documentation=https://github.com/ismatovweb/vidma
+After=network.target coturn.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/vidma
+EnvironmentFile=/etc/vidma.env
+ExecStart=/opt/vidma/videocall
+Restart=always
+RestartSec=3
+StandardOutput=append:/var/log/vidma.log
+StandardError=append:/var/log/vidma.log
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
