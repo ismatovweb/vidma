@@ -308,7 +308,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         <div class="cards">
             <div class="card">
                 <h2>Создать встречу</h2>
-                <div class="input-group"><label>Ваше имя</label><input type="text" id="create-name" placeholder="Гость" value="" autocomplete="name" onkeydown="if(event.key==='Enter'){event.preventDefault();createRoom();}"></div>
+                <div class="input-group"><label>Ваше имя</label><input type="text" id="create-name" placeholder="Гость" value="" onkeydown="if(event.key==='Enter'){event.preventDefault();createRoom();}"></div>
                 <button class="btn btn-primary" onclick="createRoom()">Создать комнату</button>
                 <div class="room-display" id="room-created">
                     <p>Код встречи:</p><div class="room-id-display" id="created-room-id"></div>
@@ -320,7 +320,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
                 <h2>Присоединиться</h2>
                 <div class="input-group"><label>Ваше имя</label><input type="text" id="join-name" placeholder="Гость" value="" autocomplete="name" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('room-id').focus();}"></div>
                 <div class="input-group"><label>Код комнаты</label><input type="text" id="room-id" placeholder="XXX-XXX-XXX" maxlength="11" inputmode="numeric" pattern="[0-9\-]*" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();joinRoom();}"></div>
-                <button class="btn btn-primary" onclick="joinRoom()">Присоединиться</button>
+                <button class="btn btn-primary" type="submit" onclick="event.preventDefault();joinRoom()">Присоединиться</button>
             </div>
         </div>
         <div class="footer-note">
