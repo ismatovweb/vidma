@@ -31,14 +31,14 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     <meta name="twitter:title" content="Vidma — Free Video Calls">
     <meta name="twitter:description" content="Join my video call in one click. No registration, encrypted, works in browser.">
     <meta name="twitter:image" content="https://vidma.online/og-image.png">
-    <meta property="og:title" content="Vidma — Free Video Calls">
-    <meta property="og:description" content="Видеозвонки в один клик. Конфиденциально, без ограничений по времени и регистрации.">
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://vidma.online/">
-    <meta property="og:image" content="https://vidma.online/favicon.ico">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="Vidma — бесплатные видеозвонки без регистрации">
-    <meta name="twitter:description" content="Видеозвонки в один клик. Конфиденциально, без ограничений и регистрации.">
+    
+    
+    
+    
+    
+    
+    
+    
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link rel="icon" type="image/png" sizes="256x256" href="/logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
