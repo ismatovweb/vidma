@@ -4,8 +4,8 @@
 #include "RoomManager.h"
 #include <httplib.h>
 #include <json.hpp>
-#include "include/vidma_html.h"
-#include "include/vidma_js.h"
+#include "vidma_html.h"
+#include "vidma_js.h"
 
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
