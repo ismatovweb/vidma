@@ -338,15 +338,24 @@ async function connectToRoom(preStream) {
 
     // 2. Create room
     room = new Room({
-        adaptiveStream: true,
+        adaptiveStream: false,
         dynacast: true,
         videoCaptureDefaults: {
-            resolution: { width: 1280, height: 720, frameRate: 30 }
+            resolution: { width: 1920, height: 1080, frameRate: 30 }
         },
         audioCaptureDefaults: {
             echoCancellation: true,
             noiseSuppression: true,
-            autoGainControl: true
+            autoGainControl: true,
+            sampleRate: 48000,
+            channelCount: 1
+        },
+        publishDefaults: {
+            simulcast: true,
+            videoSimulcastLayers: undefined,
+            videoCodec: 'vp8',
+            dtx: true,
+            red: true
         }
     });
 
@@ -376,11 +385,17 @@ async function connectToRoom(preStream) {
     if (preStream) {
         for (const track of preStream.getVideoTracks()) {
             try {
-                // КРИТИЧНО: сохраняем состояние ДО публикации
                 const wantEnabled = lobbyState.camEnabled;
                 track.enabled = wantEnabled;
-                await room.localParticipant.publishTrack(track, { source: Track.Source.Camera });
-                // SDK мог переопределить — выставляем после
+                await room.localParticipant.publishTrack(track, {
+                    source: Track.Source.Camera,
+                    simulcast: true,
+                    videoEncoding: {
+                        maxBitrate: 3_000_000,
+                        maxFramerate: 30
+                    },
+                    degradationPreference: 'maintain-resolution'
+                });
                 track.enabled = wantEnabled;
             } catch (e) { console.warn('publish video failed', e); }
         }
@@ -388,7 +403,11 @@ async function connectToRoom(preStream) {
             try {
                 const wantEnabled = lobbyState.micEnabled;
                 track.enabled = wantEnabled;
-                await room.localParticipant.publishTrack(track, { source: Track.Source.Microphone });
+                await room.localParticipant.publishTrack(track, {
+                    source: Track.Source.Microphone,
+                    dtx: true,
+                    red: true
+                });
                 track.enabled = wantEnabled;
             } catch (e) { console.warn('publish audio failed', e); }
         }
@@ -496,6 +515,64 @@ function onDataReceived(payload, participant, kind, topic) {
 // ---------------------------------------------------------------------
 // video panel management
 // ---------------------------------------------------------------------
+// =====================================================================
+// Universal fullscreen (iOS Safari + Android + desktop)
+// =====================================================================
+function isFullscreenActive() {
+    return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function toggleFullscreen(wrapperOrVideo) {
+    if (!wrapperOrVideo) return;
+    if (isFullscreenActive()) { exitFullscreen(); return; }
+
+    let video = wrapperOrVideo.tagName === 'VIDEO'
+        ? wrapperOrVideo
+        : wrapperOrVideo.querySelector('video');
+
+    if (wrapperOrVideo.requestFullscreen) {
+        wrapperOrVideo.requestFullscreen().catch(err => {
+            console.warn('requestFullscreen failed, trying webkit', err);
+            tryWebkitFullscreen(video, wrapperOrVideo);
+        });
+        return;
+    }
+    if (wrapperOrVideo.webkitRequestFullscreen) {
+        wrapperOrVideo.webkitRequestFullscreen();
+        return;
+    }
+    tryWebkitFullscreen(video, wrapperOrVideo);
+}
+
+function tryWebkitFullscreen(video, wrapper) {
+    if (video && video.webkitEnterFullscreen) {
+        try { video.webkitEnterFullscreen(); return; }
+        catch (e) { console.warn('webkitEnterFullscreen failed', e); }
+    }
+    if (wrapper && wrapper.webkitRequestFullscreen) {
+        wrapper.webkitRequestFullscreen();
+    }
+}
+
+function exitFullscreen() {
+    if (document.exitFullscreen)               document.exitFullscreen().catch(() => {});
+    else if (document.webkitExitFullscreen)    document.webkitExitFullscreen();
+    else if (document.webkitCancelFullScreen)  document.webkitCancelFullScreen();
+}
+function closeFullscreen() { exitFullscreen(); }
+
+function attachDoubleTapFullscreen(el) {
+    let lastTap = 0;
+    el.addEventListener('touchend', (e) => {
+        const now = Date.now();
+        if (now - lastTap < 300) {
+            e.preventDefault();
+            toggleFullscreen(el);
+        }
+        lastTap = now;
+    }, { passive: false });
+}
+
 function attachParticipant(participant) {
     const id = participant.identity;
     const label = participant.name || id.slice(0, 6);
@@ -514,23 +591,50 @@ function attachParticipant(participant) {
         lbl.className = 'video-label';
         lbl.textContent = label;
 
+        // Кнопка fullscreen в углу
+        const fsBtn = document.createElement('button');
+        fsBtn.className = 'fullscreen-btn';
+        fsBtn.title = 'Полный экран';
+        fsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+        fsBtn.onclick = (e) => { e.stopPropagation(); toggleFullscreen(wrapper); };
+
         wrapper.appendChild(video);
         wrapper.appendChild(lbl);
+        wrapper.appendChild(fsBtn);
+        attachDoubleTapFullscreen(wrapper);
         document.getElementById('remote-videos-grid').appendChild(wrapper);
 
         panel = { wrapperEl: wrapper, videoEl: video, labelEl: lbl, stream: new MediaStream() };
         remotePanels.set(id, panel);
     }
 
-    // Attach all currently subscribed tracks
+    // Attach all currently subscribed tracks.
+    // Screen share has higher priority than camera: if present, replace main video.
+    let hasScreenShare = false;
     participant.trackPublications.forEach(pub => {
-        if (pub.isSubscribed && pub.track && pub.kind === 'video' && pub.source === Track.Source.Camera) {
+        if (!pub.isSubscribed || !pub.track) return;
+        if (pub.kind === 'audio') {
             pub.track.attach(panel.videoEl);
+            return;
         }
-        if (pub.isSubscribed && pub.track && pub.kind === 'audio') {
+        if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare) {
+            hasScreenShare = true;
             pub.track.attach(panel.videoEl);
+            panel.labelEl.textContent = (participant.name || id.slice(0,6)) + ' (экран)';
+            panel.wrapperEl.classList.add('showing-screen');
         }
     });
+    // Camera — only if no screen share active
+    if (!hasScreenShare) {
+        participant.trackPublications.forEach(pub => {
+            if (!pub.isSubscribed || !pub.track) return;
+            if (pub.kind === 'video' && pub.source === Track.Source.Camera) {
+                pub.track.attach(panel.videoEl);
+                panel.labelEl.textContent = participant.name || id.slice(0,6);
+                panel.wrapperEl.classList.remove('showing-screen');
+            }
+        });
+    }
 }
 
 function detachParticipant(identity) {
@@ -548,30 +652,64 @@ function detachParticipant(identity) {
 // ---------------------------------------------------------------------
 async function toggleMic() {
     if (!room) return;
-    const enabled = room.localParticipant.isMicrophoneEnabled;
+    const wasEnabled = room.localParticipant.isMicrophoneEnabled;
     try {
-        await room.localParticipant.setMicrophoneEnabled(!enabled);
+        if (wasEnabled) {
+            const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+            if (pub && pub.track) {
+                try { await room.localParticipant.unpublishTrack(pub.track, true); } catch (e) {}
+                try { pub.track.stop(); } catch (e) {}
+            }
+        } else {
+            await room.localParticipant.setMicrophoneEnabled(true);
+        }
         const micOn = document.getElementById('mic-icon-on');
         const micOff = document.getElementById('mic-icon-off');
         if (micOn && micOff) {
-            micOn.style.display = enabled ? 'none' : '';
-            micOff.style.display = enabled ? '' : 'none';
+            micOn.style.display = wasEnabled ? 'none' : '';
+            micOff.style.display = wasEnabled ? '' : 'none';
         }
-    } catch (e) { console.warn(e); }
+    } catch (e) { console.warn('toggleMic failed', e); }
 }
 
 async function toggleCam() {
     if (!room) return;
-    const enabled = room.localParticipant.isCameraEnabled;
+    const wasEnabled = room.localParticipant.isCameraEnabled;
+    const btn = document.getElementById('toggle-cam');
+    if (btn) btn.disabled = true;
     try {
-        await room.localParticipant.setCameraEnabled(!enabled);
+        if (wasEnabled) {
+            // Правильный путь: unpublish + LocalTrack.stop()
+            // LocalTrack.stop() останавливает физический MediaStreamTrack
+            // И корректно чистит состояние SDK → LED гаснет
+            const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+            if (pub && pub.track) {
+                try { await room.localParticipant.unpublishTrack(pub.track, true); } catch (e) {}
+                try { pub.track.stop(); } catch (e) {}
+            }
+            const lv = document.getElementById('local-video');
+            if (lv) lv.srcObject = null;
+        } else {
+            // setCameraEnabled(true) захватывает СВЕЖИЙ трек
+            await room.localParticipant.setCameraEnabled(true);
+            await new Promise(r => setTimeout(r, 250));
+            const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+            const lv = document.getElementById('local-video');
+            if (pub && pub.videoTrack && lv) {
+                pub.videoTrack.attach(lv);
+            }
+        }
         const camOn = document.getElementById('cam-icon-on');
         const camOff = document.getElementById('cam-icon-off');
         if (camOn && camOff) {
-            camOn.style.display = enabled ? 'none' : '';
-            camOff.style.display = enabled ? '' : 'none';
+            camOn.style.display = wasEnabled ? 'none' : '';
+            camOff.style.display = wasEnabled ? '' : 'none';
         }
-    } catch (e) { console.warn(e); }
+    } catch (e) {
+        console.warn('toggleCam failed', e);
+    } finally {
+        if (btn) btn.disabled = false;
+    }
 }
 
 async function toggleScreenShare() {
@@ -579,10 +717,18 @@ async function toggleScreenShare() {
     const btn = document.getElementById('toggle-screen');
     const currently = room.localParticipant.isScreenShareEnabled;
     try {
-        await room.localParticipant.setScreenShareEnabled(!currently);
+        await room.localParticipant.setScreenShareEnabled(!currently, {
+            videoEncoding: {
+                maxBitrate: 4_000_000,
+                maxFramerate: 30
+            },
+            simulcast: true,
+            degradationPreference: 'maintain-resolution'
+        });
         if (btn) btn.classList.toggle('active', !currently);
     } catch (e) {
         console.warn('Screen share failed:', e);
+        alert('Не удалось начать трансляцию экрана: ' + e.message);
     }
 }
 

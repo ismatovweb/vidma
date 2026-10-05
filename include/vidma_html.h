@@ -349,6 +349,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 .lobby-actions .btn-lobby-join:hover { background: #6d28d9; }
 .lobby-actions .btn-lobby-cancel:hover { background: #2a2a3a; color: #ddd; }
 
+
+.remote-video-wrapper.showing-screen { border: 2px solid #8b5cf6; }
+.remote-video-wrapper.showing-screen video { object-fit: contain; }
+
 </style>
     <script type="application/ld+json">
     {
