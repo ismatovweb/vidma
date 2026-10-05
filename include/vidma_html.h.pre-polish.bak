@@ -190,21 +190,6 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     display: none;
 }
 .control-btn.chat.has-unread .badge { display: block; }
-.control-btn.chat.has-unread { animation: chat-pulse 1.6s ease-in-out infinite; }
-@keyframes chat-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(225,29,72,0.55); }
-    50%      { box-shadow: 0 0 0 6px rgba(225,29,72,0); }
-}
-.chat-time {
-    display: block;
-    font-size: 0.65rem;
-    opacity: 0.7;
-    margin-top: 3px;
-    text-align: right;
-    font-weight: 500;
-}
-.chat-msg.mine .chat-time { color: rgba(255,255,255,0.75); }
-.chat-msg.theirs .chat-time { color: #888; }
 
 #chat-panel {
     position: fixed; top: 0; right: 0; bottom: 0;
