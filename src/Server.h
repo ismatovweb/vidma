@@ -289,6 +289,34 @@ private:
             res.set_content(j.dump(), "application/json");
         });
 
+        httpServer_.Post("/api/feedback", [this](const httplib::Request& req, httplib::Response& res) {
+            try {
+                json b = json::parse(req.body);
+                json entry;
+                entry["ts"]         = (int64_t)std::time(nullptr);
+                entry["roomId"]     = b.value("roomId", std::string("unknown"));
+                entry["rating"]     = b.value("rating", 0);
+                entry["comment"]    = b.value("comment", std::string());
+                entry["userAgent"]  = b.value("userAgent", std::string());
+                entry["ipHash"]     = clientIpHash(req);
+                // cap sizes
+                if (entry["comment"].is_string() && entry["comment"].get<std::string>().size() > 1000) {
+                    entry["comment"] = entry["comment"].get<std::string>().substr(0, 1000);
+                }
+                if (entry["userAgent"].is_string() && entry["userAgent"].get<std::string>().size() > 300) {
+                    entry["userAgent"] = entry["userAgent"].get<std::string>().substr(0, 300);
+                }
+                std::ofstream fb("/var/log/vidma-feedback.jsonl", std::ios::app);
+                if (fb.is_open()) fb << entry.dump() << "\n";
+                json ok; ok["status"] = "ok";
+                res.set_content(ok.dump(), "application/json");
+            } catch (const std::exception& e) {
+                json err; err["status"] = "error"; err["message"] = e.what();
+                res.status = 400;
+                res.set_content(err.dump(), "application/json");
+            }
+        });
+
         httpServer_.Post("/api/room/create", [this](const httplib::Request& req, httplib::Response& res) {
             std::string roomId = roomManager_.createRoom();
             logEvent("room_create id=" + roomId);

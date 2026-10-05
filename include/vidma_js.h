@@ -566,13 +566,27 @@ function closeRating() {
 }
 
 function submitRating() {
-    if (selectedRating > 0) {
+    const commentEl = document.getElementById('rating-comment');
+    const comment = commentEl ? commentEl.value.trim().slice(0, 500) : '';
+    const rating = selectedRating;
+
+    // Отправляем если есть хоть что-то (оценка или комментарий)
+    if (rating > 0 || comment.length > 0) {
         fetch('/api/feedback', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ roomId: currentRoomId, rating: selectedRating, comment: '' })
-        }).catch(() => {});
+            body: JSON.stringify({
+                roomId: currentRoomId || 'unknown',
+                rating: rating,
+                comment: comment,
+                userAgent: (navigator.userAgent || '').slice(0, 200)
+            })
+        }).then(r => r.json())
+          .then(d => console.log('[feedback] sent:', d))
+          .catch(e => console.warn('[feedback] failed:', e));
     }
+
+    if (commentEl) commentEl.value = '';
     closeRating();
 }
 

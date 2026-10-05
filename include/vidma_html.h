@@ -298,6 +298,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 Без регистрации. Ваш разговор конфиденциален.
             </div>
+            <div class="privacy-badge" style="background:rgba(245,158,11,0.12);color:#fbbf24;border-color:rgba(245,158,11,0.3);margin-top:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M12 18v4M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M18 12h4M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/></svg>
+                Тестовая версия. Пожалуйста, оставьте отзыв после звонка — это очень помогает!
+            </div>
             <h1 style="position:absolute; opacity:0; pointer-events:none;">Бесплатные видеозвонки Vidma</h1>
             <div class="subtitle">Видеовстречи в один клик</div>
         </header>
@@ -334,6 +338,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 
     <div id="call-screen">
         <div class="top-bar">
+            <div class="security-bar" id="beta-indicator" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);display:flex;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Beta
+            </div>
             <div class="security-bar" id="security-bar">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 Connection is protected
@@ -402,6 +410,11 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
                 <span data-value="4">☆</span>
                 <span data-value="5">☆</span>
             </div>
+            <p style="font-size:0.85rem;color:#bbb;margin:14px 0 8px;text-align:left;">
+                Что понравилось или что сломалось? <span style="color:#888;">(необязательно)</span>
+            </p>
+            <textarea id="rating-comment" maxlength="500" placeholder="Например: звук отличный, но видео дёргается на телефоне"
+                style="width:100%;min-height:70px;padding:10px 12px;border-radius:12px;background:#2a2a3a;color:#fff;border:1px solid #444;font-family:inherit;font-size:0.9rem;resize:vertical;outline:none;"></textarea>
             <button onclick="submitRating()">Отправить</button>
             <button onclick="closeRating()" style="background: transparent; border: 1px solid #555; margin-left: 10px;">Пропустить</button>
         </div>
