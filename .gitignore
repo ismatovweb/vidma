@@ -26,3 +26,9 @@ vidma_events.log
 *.sqlite
 *.sqlite3
 *.pre-polish.bak
+*.pre-*.bak
+*.pre-livekit.bak
+*.pre-reorder.bak
+*.pre-chat.bak
+*.pre-polish.bak
+*.sprint0.bak
