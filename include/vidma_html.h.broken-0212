@@ -1,0 +1,253 @@
+// Auto-generated from Server.h by sprint1_extract.py
+// HTML template for the Vidma main page. Do not edit by hand.
+#ifndef VIDMA_HTML_H
+#define VIDMA_HTML_H
+
+constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
+<html lang="ru">
+<head>
+
+    
+
+
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#121212">
+    <title data-i18n="app.title">Vidma — Free Video Calls</title>
+    <meta name="description" content="Free video calls in your browser. No registration, encrypted, works on any device.">
+    <link rel="canonical" href="https://vidma.online/">
+
+    <!-- Open Graph (Telegram, WhatsApp, Facebook, LinkedIn, iMessage) -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Vidma">
+    <meta property="og:url" content="https://vidma.online/">
+    <meta property="og:title" content="Vidma — Free Video Calls">
+    <meta property="og:description" content="Free video calls in your browser. No registration, encrypted.">
+    <meta property="og:image" content="https://vidma.online/og-image.png">
+    <meta property="og:image:secure_url" content="https://vidma.online/og-image.png">
+    <meta property="og:image:type" content="image/png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="Vidma — Free Video Calls">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Vidma — Free Video Calls">
+    <meta name="twitter:description" content="Free video calls in your browser. No registration, encrypted.">
+    <meta name="twitter:image" content="https://vidma.online/og-image.png">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="icon" type="image/png" sizes="256x256" href="/logo.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <meta name="msapplication-TileColor" content="#7c3aed">
+    <link rel="preload" as="image" href="/logo.png">
+</head>
+<body>
+<div id="vidma-lang-root" style="position:fixed;top:20px;right:20px;z-index:2147483647;font-family:inherit;">
+    <button id="vidma-lang-btn" type="button" onclick="vidmaToggleLang(event)" aria-haspopup="listbox" aria-expanded="false" style="display:flex;align-items:center;gap:8px;background:rgba(30,30,45,0.9);backdrop-filter:blur(14px);color:#e0e0e0;border:1px solid rgba(139,92,246,0.35);border-radius:100px;padding:8px 14px 8px 12px;font-size:0.9rem;font-weight:500;cursor:pointer;outline:none;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
+        <span class="vflag" id="vidma-current-flag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;flex-shrink:0;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#012169"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#fff" stroke-width="3.2"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" stroke-width="1.6"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#fff" stroke-width="5.3"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#C8102E" stroke-width="3.2"/></svg></span>
+        <span id="vidma-current-name">English</span>
+        <svg class="vchev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;stroke:#a78bfa;transition:transform 0.2s;"><polyline points="6 9 12 15 18 9"/></svg>
+    </button>
+    <div id="vidma-lang-menu" role="listbox" style="position:absolute;top:calc(100% + 8px);right:0;background:rgba(30,30,45,0.98);backdrop-filter:blur(20px);border:1px solid rgba(139,92,246,0.35);border-radius:14px;padding:6px;min-width:180px;box-shadow:0 12px 40px rgba(0,0,0,0.65);opacity:0;visibility:hidden;transform:translateY(-6px);transition:all 0.18s;max-height:80vh;overflow-y:auto;">
+        <button class="vlang-item" data-lang="en" onclick="vidmaPickLang('en',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#012169"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#fff" stroke-width="3.2"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" stroke-width="1.6"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#fff" stroke-width="5.3"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#C8102E" stroke-width="3.2"/></svg></span><span class="vname" style="flex:1;">English</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="ru" onclick="vidmaPickLang('ru',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="5.33" fill="#fff"/><rect y="5.33" width="24" height="5.33" fill="#0039A6"/><rect y="10.66" width="24" height="5.34" fill="#D52B1E"/></svg></span><span class="vname" style="flex:1;">Русский</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="es" onclick="vidmaPickLang('es',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#AA151B"/><rect y="4" width="24" height="8" fill="#F1BF00"/></svg></span><span class="vname" style="flex:1;">Español</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="de" onclick="vidmaPickLang('de',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="5.33" fill="#000"/><rect y="5.33" width="24" height="5.33" fill="#DD0000"/><rect y="10.66" width="24" height="5.34" fill="#FFCE00"/></svg></span><span class="vname" style="flex:1;">Deutsch</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="fr" onclick="vidmaPickLang('fr',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="8" height="16" fill="#002395"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ED2939"/></svg></span><span class="vname" style="flex:1;">Français</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="zh" onclick="vidmaPickLang('zh',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#DE2910"/><polygon points="4.5,2.5 5.6,5.6 2.6,3.4 6.4,3.4 3.4,5.6" fill="#FFDE00"/></svg></span><span class="vname" style="flex:1;">中文</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="ja" onclick="vidmaPickLang('ja',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#fff"/><circle cx="12" cy="8" r="4.4" fill="#BC002D"/></svg></span><span class="vname" style="flex:1;">日本語</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+        <button class="vlang-item" data-lang="pt" onclick="vidmaPickLang('pt',event)" type="button" style="display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:transparent;border:none;border-radius:10px;color:#d0d0d0;font-size:0.9rem;text-align:left;cursor:pointer;"><span class="vflag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg></span><span class="vname" style="flex:1;">Português</span><svg class="vcheck" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;opacity:0;"><polyline points="20 6 9 17 4 12"/></svg></button>
+    </div>
+</div>
+
+
+
+<div class="container" id="main-screen">
+        <header>
+            <div class="logo" style="display:flex;align-items:center;justify-content:center;gap:14px;">
+                <img src="/logo.png" alt="Vidma" width="72" height="72" style="border-radius:18px;" fetchpriority="high">
+                <span>Vidma</span>
+            </div>
+            <div class="privacy-badge">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span data-i18n="badge.privacy">No registration. Your conversation is private.</span>
+            </div>
+            <div class="privacy-badge" style="background:rgba(245,158,11,0.12);color:#fbbf24;border-color:rgba(245,158,11,0.3);margin-top:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M12 18v4M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M18 12h4M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/></svg>
+                <span data-i18n="badge.beta">Beta version. Please leave feedback after the call!</span>
+            </div>
+            <h1 style="position:absolute; opacity:0; pointer-events:none;">Бесплатные видеозвонки Vidma</h1>
+            <div class="subtitle" data-i18n="app.subtitle">Video meetings in one click</div>
+        </header>
+        <div class="cards">
+            <div class="card">
+                <h2 data-i18n="card.create">Create a meeting</h2>
+                <div class="input-group"><label data-i18n="label.yourName">Your name</label><input type="text" id="create-name" placeholder="Guest" data-i18n-placeholder="placeholder.guest" value="" autocomplete="name" onkeydown="if(event.key==='Enter'){event.preventDefault();createRoom();}"></div>
+                <button class="btn btn-primary" onclick="createRoom()" data-i18n="btn.createRoom">Create room</button>
+                <div class="room-display" id="room-created">
+                    <p data-i18n="room.code">Meeting code:</p><div class="room-id-display" id="created-room-id"></div>
+                    <button class="btn btn-outline" onclick="copyRoomLink()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> data-i18n="btn.copyLink">Copy link</button>
+                    <button class="btn btn-primary" style="margin-top: 12px;" onclick="joinCreatedRoom()" data-i18n="btn.enterRoom">Enter room</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2 data-i18n="card.join">Join</h2>
+                <div class="input-group"><label data-i18n="label.yourName">Your name</label><input type="text" id="join-name" placeholder="Guest" data-i18n-placeholder="placeholder.guest" value="" autocomplete="name" onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('room-id').focus();}"></div>
+                <div class="input-group"><label data-i18n="label.roomCode">Room code</label><input type="text" id="room-id" placeholder="XXX-XXX-XXX" maxlength="11" inputmode="numeric" pattern="[0-9\-]*" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();joinRoom();}"></div>
+                <button class="btn btn-primary" onclick="joinRoom()" data-i18n="btn.join">Join</button>
+            </div>
+        </div>
+        <div class="footer-note">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <span data-i18n="footer.noHistory">We don't store call history and don't require installation.</span>
+        </div>
+        <div class="support-link">
+            <span data-i18n="support">Support</span>: <span>vidma.on@gmail.com</span>
+        </div>
+        <div class="legal-links">
+            <a href="/privacy" data-i18n="legal.privacy">Privacy</a>
+            <a href="/terms" data-i18n="legal.terms">Terms</a>
+        </div>
+    </div>
+
+    <div id="lobby-screen">
+        <div class="lobby-wrap">
+            <h2 data-i18n="lobby.title">Check camera and microphone</h2>
+            <p class="lobby-sub" data-i18n="lobby.subtitle">Make sure you are seen and heard, then join the room</p>
+
+            <div class="lobby-preview" id="lobby-preview-box">
+                <video id="lobby-video" autoplay playsinline muted></video>
+                <div class="no-video">Камера выключена</div>
+            </div>
+
+            <div class="lobby-row">
+                <label data-i18n="lobby.mic">Microphone</label>
+                <select id="lobby-mic-select"></select>
+                <button class="tog on" id="lobby-mic-toggle" onclick="lobbyToggleMic()" title="Вкл/выкл микрофон">
+                    <svg id="lobby-mic-svg-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <svg id="lobby-mic-svg-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </button>
+            </div>
+            <div class="lobby-level"><div id="lobby-level-bar"></div></div>
+
+            <div class="lobby-row">
+                <label data-i18n="lobby.camera">Camera</label>
+                <select id="lobby-cam-select"></select>
+                <button class="tog on" id="lobby-cam-toggle" onclick="lobbyToggleCam()" title="Вкл/выкл камеру">
+                    <svg id="lobby-cam-svg-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <svg id="lobby-cam-svg-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56"/></svg>
+                </button>
+            </div>
+
+            <div class="lobby-actions">
+                <button class="btn-lobby-cancel" onclick="cancelLobby()" data-i18n="lobby.cancel">Cancel</button>
+                <button class="btn-lobby-join" id="lobby-join-btn" onclick="confirmLobbyEntry()">Войти в комнату</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="call-screen">
+        <div class="top-bar">
+            <div class="security-bar" id="beta-indicator" style="background:rgba(245,158,11,0.15);color:#fbbf24;border-color:rgba(245,158,11,0.3);display:flex;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Beta
+            </div>
+            <div class="security-bar" id="security-bar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Connection is protected
+            </div>
+            <div class="room-info-bar" id="room-info-bar">
+                <span data-i18n="call.room">Room</span><span class="room-code" id="current-room-code"></span>
+                <button class="share-btn" onclick="shareRoomFromCall()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Копировать ссылку</button>
+            </div>
+        </div>
+        <div id="videos-container">
+            <div id="remote-videos-grid"></div>
+        </div>
+        <div id="local-video-container">
+            <div class="video-label" id="local-video-label" data-i18n="call.you">You</div>
+            <div class="video-avatar" id="local-video-avatar">
+                <div class="avatar-circle" id="local-avatar-circle"></div>
+            </div>
+            <video id="local-video" autoplay playsinline muted></video>
+        </div>
+        <div id="local-camera-container">
+            <div class="video-label" data-i18n="call.camera">Camera</div>
+            <video id="local-camera-video" autoplay playsinline muted></video>
+        </div>
+        <div id="chat-panel">
+        <div id="chat-header">
+            <span data-i18n="chat.title">Room chat</span>
+            <button class="close-chat" onclick="toggleChatPanel()" title="Закрыть">✕</button>
+        </div>
+        <div id="chat-messages">
+            <div id="chat-empty">История чата видна только вам и хранится в этом браузере.</div>
+        </div>
+        <form id="chat-form" onsubmit="handleChatSubmit(event)">
+            <input type="text" id="chat-input" placeholder="Message..." data-i18n-placeholder="chat.placeholder" maxlength="500" autocomplete="off">
+            <button type="submit" id="chat-send">→</button>
+        </form>
+    </div>
+    
+    <div class="controls">
+            <button class="control-btn" id="toggle-mic" onclick="toggleMic()">
+                <svg id="mic-icon-on" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                <svg id="mic-icon-off" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            </button>
+            <button class="control-btn" id="toggle-cam" onclick="toggleCam()">
+                <svg id="cam-icon-on" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                <svg id="cam-icon-off" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56"/></svg>
+            </button>
+            <button class="control-btn screen-share" id="toggle-screen" onclick="toggleScreenShare()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            </button>
+            <button class="control-btn chat" id="toggle-chat" onclick="toggleChatPanel()" title="Чат">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="badge" id="chat-badge">0</span>
+            </button>
+            <button class="control-btn danger" onclick="leaveCall()">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div class="modal-overlay" id="rating-modal">
+        <div class="modal">
+            <h3 data-i18n="rating.title">Rate the call quality</h3>
+            <div class="stars" id="stars">
+                <span data-value="1">☆</span>
+                <span data-value="2">☆</span>
+                <span data-value="3">☆</span>
+                <span data-value="4">☆</span>
+                <span data-value="5">☆</span>
+            </div>
+            <p style="font-size:0.85rem;color:#bbb;margin:14px 0 8px;text-align:left;">
+                Что понравилось или что сломалось? <span style="color:#888;">(необязательно)</span>
+            </p>
+            <textarea id="rating-comment" maxlength="500" placeholder="Например: звук отличный, но видео дёргается на телефоне"
+                style="width:100%;min-height:70px;padding:10px 12px;border-radius:12px;background:#2a2a3a;color:#fff;border:1px solid #444;font-family:inherit;font-size:0.9rem;resize:vertical;outline:none;"></textarea>
+            <button onclick="submitRating()" data-i18n="rating.submit">Submit</button>
+            <button onclick="closeRating()" style="background: transparent; border: 1px solid #555; margin-left: 10px;" data-i18n="rating.skip">Skip</button>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="camera-choice-modal">
+        <div class="modal">
+            <h3 data-i18n="camera.title">Camera access</h3>
+            <p style="margin-bottom: 20px; font-size: 0.9rem; color: #ccc;"><span data-i18n="camera.hint">Allow camera access or join without video.</span></p>
+            <button onclick="retryCamera()" data-i18n="camera.allow">Enable camera</button>
+            <button onclick="joinWithoutCamera()" style="background: transparent; border: 1px solid #555; margin-left: 10px;" data-i18n="camera.noVideo">Without video</button>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.7/dist/livekit-client.umd.min.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>)html";
+
+#endif // VIDMA_HTML_H

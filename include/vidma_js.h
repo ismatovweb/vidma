@@ -44,7 +44,7 @@ function setLocalVideoLabel(txt) {
 // room creation / joining
 // ---------------------------------------------------------------------
 async function createRoom() {
-    let name = (document.getElementById('create-name')?.value || '').trim() || 'Гость';
+    let name = (document.getElementById('create-name')?.value || '').trim() || i18nT('placeholder.guest');
     console.log('[createRoom] name =', name);
     try {
         const res = await fetch('/api/room/create', {
@@ -53,13 +53,13 @@ async function createRoom() {
             body: JSON.stringify({ name })
         });
         const data = await res.json();
-        if (!data.success) { showToast('Не удалось создать комнату'); return; }
+        if (!data.success) { showToast(i18nT('error.createRoom')); return; }
         currentRoomId = data.roomId;
         currentName = name;
         document.getElementById('created-room-id').textContent = data.roomId;
         document.getElementById('room-created').style.display = 'block';
     } catch (e) {
-        showToast('Ошибка соединения');
+        showToast(i18nT('error.connection'));
         console.error(e);
     }
 }
@@ -67,8 +67,8 @@ async function createRoom() {
 function copyRoomLink() {
     if (!currentRoomId) return;
     const link = location.origin + '/?room=' + currentRoomId;
-    const text = link + '\nVidma — Видеовстречи в один клик';
-    navigator.clipboard.writeText(text).then(() => showToast('Ссылка скопирована'));
+    const text = i18nT('link.share') + '\n' + link;
+    navigator.clipboard.writeText(text).then(() => showToast(i18nT('toast.linkCopied')));
 }
 
 function joinCreatedRoom() {
@@ -79,18 +79,18 @@ function joinCreatedRoom() {
 }
 
 async function joinRoom() {
-    let name = (document.getElementById('join-name')?.value || '').trim() || 'Гость';
+    let name = (document.getElementById('join-name')?.value || '').trim() || i18nT('placeholder.guest');
     console.log('[joinRoom] name =', name);
     let raw = (document.getElementById('room-id')?.value || '').trim();
     const digits = raw.replace(/\D/g, '');
-    if (digits.length !== 9) { alert('Введите 9 цифр кода комнаты'); return; }
+    if (digits.length !== 9) { alert(i18nT('error.invalidCode')); return; }
     const roomId = digits.slice(0,3) + '-' + digits.slice(3,6) + '-' + digits.slice(6,9);
     try {
         const res = await fetch('/api/room/' + roomId + '/exists');
         const data = await res.json();
-        if (!data.exists) { alert('Комната не найдена'); return; }
+        if (!data.exists) { alert(i18nT('error.roomNotFound')); return; }
         joinRoomById(roomId, name);
-    } catch (e) { alert('Ошибка соединения'); }
+    } catch (e) { alert(i18nT('error.connection')); }
 }
 
 async function joinRoomById(roomId, name) {
@@ -124,6 +124,176 @@ function resolveName(preferredName) {
     if (jv && !isGuestName(jv)) return jv;
     return 'Гость';
 }
+
+
+// =====================================================================
+// i18n — internationalization engine
+// =====================================================================
+const I18N_SUPPORTED = ['en', 'ru', 'es', 'de', 'fr', 'zh', 'ja', 'pt'];
+const I18N_DEFAULT = 'en';
+let i18nTranslations = {};
+let i18nCurrent = I18N_DEFAULT;
+
+function i18nDetect() {
+    // 1. localStorage
+    try {
+        const saved = localStorage.getItem('vidma-lang');
+        if (saved && I18N_SUPPORTED.includes(saved)) return saved;
+    } catch (e) {}
+    // 2. navigator.language(s)
+    const navs = navigator.languages || [navigator.language || navigator.userLanguage || ''];
+    for (const l of navs) {
+        const short = String(l).toLowerCase().split('-')[0];
+        if (I18N_SUPPORTED.includes(short)) return short;
+    }
+    return I18N_DEFAULT;
+}
+
+function i18nT(key, fallback) {
+    const dict = i18nTranslations[i18nCurrent] || {};
+    if (dict[key] !== undefined) return dict[key];
+    const def = i18nTranslations[I18N_DEFAULT] || {};
+    if (def[key] !== undefined) return def[key];
+    return fallback !== undefined ? fallback : key;
+}
+
+function i18nApplyAll() {
+    // Text nodes
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        const val = i18nT(key);
+        if (val !== undefined && val !== null) el.textContent = val;
+    });
+    // Placeholders
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+        const key = el.getAttribute('data-i18n-placeholder');
+        el.placeholder = i18nT(key);
+    });
+    // Titles
+    document.querySelectorAll('[data-i18n-title]').forEach(el => {
+        const key = el.getAttribute('data-i18n-title');
+        el.title = i18nT(key);
+    });
+    // html lang attr
+    document.documentElement.setAttribute('lang', i18nCurrent);
+}
+
+async function i18nLoad() {
+    try {
+        const res = await fetch('/translations.json', { cache: 'no-store' });
+        i18nTranslations = await res.json();
+    } catch (e) {
+        console.warn('[i18n] failed to load translations', e);
+        i18nTranslations = {};
+    }
+    i18nCurrent = i18nDetect();
+    i18nApplyAll();
+    vidmaUpdateLangUI();
+}
+
+function i18nSetLang(lang) {
+    if (!I18N_SUPPORTED.includes(lang)) return;
+    i18nCurrent = lang;
+    try { localStorage.setItem('vidma-lang', lang); } catch (e) {}
+    i18nApplyAll();
+    vidmaUpdateLangUI();
+    // Re-render dynamic parts that were created in JS with hardcoded text
+    if (typeof renderChatHistory === 'function' && currentRoomId) {
+        try { renderChatHistory(currentRoomId); } catch (e) {}
+    }
+}
+
+
+
+// =====================================================================
+// Custom language dropdown
+// =====================================================================
+const LANG_META = {
+    en: { name: 'English',  flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#012169"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#fff" stroke-width="3.2"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" stroke-width="1.6"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#fff" stroke-width="5.3"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#C8102E" stroke-width="3.2"/></svg>' },
+    ru: { name: 'Русский', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="5.33" fill="#fff"/><rect y="5.33" width="24" height="5.33" fill="#0039A6"/><rect y="10.66" width="24" height="5.34" fill="#D52B1E"/></svg>' },
+    es: { name: 'Español', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#AA151B"/><rect y="4" width="24" height="8" fill="#F1BF00"/></svg>' },
+    de: { name: 'Deutsch', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="5.33" fill="#000"/><rect y="5.33" width="24" height="5.33" fill="#DD0000"/><rect y="10.66" width="24" height="5.34" fill="#FFCE00"/></svg>' },
+    fr: { name: 'Français', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="8" height="16" fill="#002395"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ED2939"/></svg>' },
+    zh: { name: '中文', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#DE2910"/><polygon points="4.5,2.5 5.6,5.6 2.6,3.4 6.4,3.4 3.4,5.6" fill="#FFDE00"/></svg>' },
+    ja: { name: '日本語', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#fff"/><circle cx="12" cy="8" r="4.4" fill="#BC002D"/></svg>' },
+    pt: { name: 'Português', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg>' }
+};
+
+
+
+
+
+// Close menu on outside click / Esc
+document.addEventListener('click', (e) => {
+    const sw = document.getElementById('lang-switcher');
+    if (sw && !sw.contains(e.target)) closeLangMenu();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLangMenu();
+});
+
+
+// =====================================================================
+// Custom language dropdown (fixed top-right)
+// =====================================================================
+const VIDMA_LANG_META = {
+    en: { name: 'English',  flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#012169"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#fff" stroke-width="3.2"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" stroke-width="1.6"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#fff" stroke-width="5.3"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#C8102E" stroke-width="3.2"/></svg>' },
+    ru: { name: 'Русский', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="5.33" fill="#fff"/><rect y="5.33" width="24" height="5.33" fill="#0039A6"/><rect y="10.66" width="24" height="5.34" fill="#D52B1E"/></svg>' },
+    es: { name: 'Español', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#AA151B"/><rect y="4" width="24" height="8" fill="#F1BF00"/></svg>' },
+    de: { name: 'Deutsch', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="5.33" fill="#000"/><rect y="5.33" width="24" height="5.33" fill="#DD0000"/><rect y="10.66" width="24" height="5.34" fill="#FFCE00"/></svg>' },
+    fr: { name: 'Français', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="8" height="16" fill="#002395"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ED2939"/></svg>' },
+    zh: { name: '中文', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#DE2910"/><polygon points="4.5,2.5 5.6,5.6 2.6,3.4 6.4,3.4 3.4,5.6" fill="#FFDE00"/></svg>' },
+    ja: { name: '日本語', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#fff"/><circle cx="12" cy="8" r="4.4" fill="#BC002D"/></svg>' },
+    pt: { name: 'Português', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg>' }
+};
+
+function vidmaToggleLang(e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    const root = document.getElementById('vidma-lang-root');
+    if (!root) return;
+    const open = root.classList.toggle('open');
+    const btn = document.getElementById('vidma-lang-btn');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function vidmaCloseLang() {
+    const root = document.getElementById('vidma-lang-root');
+    if (root) root.classList.remove('open');
+    const btn = document.getElementById('vidma-lang-btn');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+function vidmaPickLang(lang, e) {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    i18nSetLang(lang);
+    vidmaCloseLang();
+}
+
+function vidmaUpdateLangUI() {
+    const meta = VIDMA_LANG_META[i18nCurrent] || VIDMA_LANG_META.en;
+    const nameEl = document.getElementById('vidma-current-name');
+    const flagEl = document.getElementById('vidma-current-flag');
+    if (nameEl) nameEl.textContent = meta.name;
+    if (flagEl) flagEl.innerHTML = meta.flag;
+    document.querySelectorAll('.vlang-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.lang === i18nCurrent);
+    });
+}
+
+// Close on outside click / Esc
+document.addEventListener('click', (e) => {
+    const root = document.getElementById('vidma-lang-root');
+    if (root && !root.contains(e.target)) vidmaCloseLang();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') vidmaCloseLang();
+});
+
+// Export to window
+window.vidmaToggleLang = vidmaToggleLang;
+window.vidmaCloseLang = vidmaCloseLang;
+window.vidmaPickLang = vidmaPickLang;
+window.vidmaUpdateLangUI = vidmaUpdateLangUI;
 
 function showLobby(roomId, name) {
     currentRoomId = roomId;
@@ -187,14 +357,14 @@ async function populateLobbyDevices() {
                 micCount++;
                 const opt = document.createElement('option');
                 opt.value = d.deviceId;
-                opt.textContent = d.label || ('Микрофон ' + micCount);
+                opt.textContent = d.label || (i18nT('lobby.mic') + ' ' + micCount);
                 if (currentMic && d.deviceId === currentMic) opt.selected = true;
                 micSel.appendChild(opt);
             } else if (d.kind === 'videoinput') {
                 camCount++;
                 const opt = document.createElement('option');
                 opt.value = d.deviceId;
-                opt.textContent = d.label || ('Камера ' + camCount);
+                opt.textContent = d.label || (i18nT('lobby.camera') + ' ' + camCount);
                 if (currentCam && d.deviceId === currentCam) opt.selected = true;
                 camSel.appendChild(opt);
             }
@@ -328,7 +498,7 @@ async function confirmLobbyEntry() {
     document.getElementById('lobby-screen').classList.remove('active');
     document.getElementById('call-screen').style.display = 'block';
     document.getElementById('current-room-code').textContent = currentRoomId;
-    setLocalVideoLabel(currentName + ' (Вы)');
+    setLocalVideoLabel(currentName + ' (' + i18nT('call.you') + ')');
     await connectToRoom(stream);
 }
 
@@ -360,7 +530,7 @@ async function connectToRoom(preStream) {
             console.log('[JWT payload]', payload);
         } catch (e) {}
     } catch (e) {
-        alert('Не удалось получить токен: ' + e.message);
+        alert(i18nT('error.token') + ' ' + e.message);
         leaveCall();
         return;
     }
@@ -407,7 +577,7 @@ async function connectToRoom(preStream) {
     try {
         await room.connect(data.livekitUrl, data.livekitToken);
     } catch (e) {
-        alert('Не удалось подключиться к комнате: ' + e.message);
+        alert(i18nT('error.connectRoom') + ' ' + e.message);
         leaveCall();
         return;
     }
@@ -504,7 +674,7 @@ function onDisconnected(reason) {
     if (reason === DisconnectReason.CLIENT_INITIATED) {
         showRatingModal();
     } else {
-        showToast('Соединение с комнатой потеряно');
+        showToast(i18nT('error.disconnected'));
     }
 }
 
@@ -772,7 +942,7 @@ function attachParticipant(participant) {
         // Кнопка fullscreen в углу
         const fsBtn = document.createElement('button');
         fsBtn.className = 'fullscreen-btn';
-        fsBtn.title = 'Полный экран';
+        fsBtn.title = i18nT('call.fullscreen');
         fsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
         fsBtn.onclick = (e) => { e.stopPropagation(); toggleFullscreen(wrapper); };
 
@@ -810,7 +980,7 @@ function attachParticipant(participant) {
         if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare) {
             hasScreenShare = true;
             pub.track.attach(panel.videoEl);
-            panel.labelEl.textContent = (participant.name || id.slice(0,6)) + ' (экран)';
+            panel.labelEl.textContent = (participant.name || id.slice(0,6)) + ' (' + i18nT('call.screen') + ')';
             panel.wrapperEl.classList.add('showing-screen');
         }
     });
@@ -950,7 +1120,7 @@ async function toggleScreenShare() {
         if (btn) btn.classList.toggle('active', !currently);
     } catch (e) {
         console.warn('Screen share failed:', e);
-        alert('Не удалось начать трансляцию экрана: ' + e.message);
+        alert(i18nT('error.screenShare') + ' ' + e.message);
     }
 }
 
@@ -1030,7 +1200,7 @@ function renderChatMessage(msg) {
     if (!msg.system) {
         const a = document.createElement('span');
         a.className = 'chat-author';
-        a.textContent = msg.mine ? 'Вы' : (msg.sender || 'Участник');
+        a.textContent = msg.mine ? i18nT('call.you') : (msg.sender || i18nT('chat.participant'));
         el.appendChild(a);
     }
     const textNode = document.createTextNode(msg.text);
@@ -1053,7 +1223,7 @@ function renderChatHistory(roomId) {
     if (msgs.length === 0) {
         const e = document.createElement('div');
         e.id = 'chat-empty';
-        e.textContent = 'История чата видна только вам и хранится в этом браузере.';
+        e.textContent = i18nT('chat.empty');
         box.appendChild(e);
         return;
     }
@@ -1080,7 +1250,7 @@ function appendChatMessage(from, text) {
         chatUnread++;
         updateChatBadge();
         playChatPing();
-        showToast('Новое сообщение в чате');
+        showToast(i18nT('chat.newMessage'));
     }
 }
 
@@ -1143,7 +1313,7 @@ function handleChatSubmit(ev) {
         input.value = '';
     }).catch(e => {
         console.warn('send failed', e);
-        showToast('Не удалось отправить сообщение');
+        showToast(i18nT('error.sendMessage'));
     });
 }
 
@@ -1164,7 +1334,7 @@ async function sendChatMessage(text) {
         console.log('[chat] publishData: OK');
     } catch (e) {
         console.error('[chat] publishData FAILED:', e);
-        showToast('Не удалось отправить');
+        showToast(i18nT('error.sendMessage'));
         throw e;
     }
     appendChatMessage(currentSessionId, text);
@@ -1244,7 +1414,8 @@ async function joinWithoutCamera() {
 // ---------------------------------------------------------------------
 // URL ?room= auto-fill
 // ---------------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await i18nLoad();
     // Разбудить AudioContext при первом клике — политика браузера
     const resumeAudio = () => {
         try {
@@ -1306,6 +1477,11 @@ window.closeRating = closeRating;
 window.retryCamera = retryCamera;
 window.joinWithoutCamera = joinWithoutCamera;
 window.shareRoomFromCall = copyRoomLink;
+window.i18nSetLang = i18nSetLang;
+window.toggleLangMenu = toggleLangMenu;
+window.pickLang = pickLang;
+window.closeLangMenu = closeLangMenu;
+window.i18nT = i18nT;
 window.toggleChatPanel = toggleChatPanel;
 window.handleChatSubmit = handleChatSubmit;
 )js";
