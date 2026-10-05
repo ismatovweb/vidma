@@ -277,6 +277,78 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     font-size: 0.85rem; font-style: italic;
 }
 
+
+/* === Lobby (preview before joining) === */
+#lobby-screen {
+    display: none;
+    position: fixed; inset: 0;
+    background: #0f0f16;
+    z-index: 1500;
+    align-items: center; justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+#lobby-screen.active { display: flex; }
+.lobby-wrap {
+    max-width: 600px; width: 100%;
+    background: #1a1a24; padding: 28px; border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+}
+.lobby-wrap h2 { margin: 0 0 6px; color: #fff; font-size: 1.4rem; text-align: center; }
+.lobby-wrap .lobby-sub { color: #888; font-size: 0.9rem; text-align: center; margin-bottom: 20px; }
+.lobby-preview {
+    aspect-ratio: 4/3; background: #000; border-radius: 16px; overflow: hidden;
+    margin-bottom: 16px; position: relative;
+}
+.lobby-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.lobby-preview .no-video {
+    position: absolute; inset: 0; display: none;
+    align-items: center; justify-content: center;
+    background: #1a1a24; color: #666; font-size: 0.9rem;
+}
+.lobby-preview.no-video .no-video { display: flex; }
+.lobby-preview.no-video video { visibility: hidden; }
+.lobby-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.lobby-row label { flex: 0 0 90px; color: #aaa; font-size: 0.85rem; }
+.lobby-row select {
+    flex: 1; min-width: 0;
+    padding: 9px 12px; border-radius: 10px;
+    background: #23232f; color: #fff;
+    border: 1px solid #444; outline: none;
+    font-family: inherit; font-size: 0.9rem;
+}
+.lobby-row select:focus { border-color: #7c3aed; }
+.lobby-row .tog {
+    flex: 0 0 40px; height: 40px; border-radius: 20px;
+    background: #333; color: #fff; border: none; cursor: pointer;
+    font-size: 1rem; display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+}
+.lobby-row .tog.on { background: #7c3aed; }
+.lobby-row .tog.off { background: #3a1f2a; }
+.lobby-row .tog svg { pointer-events: none; }
+.lobby-level {
+    height: 6px; background: #23232f; border-radius: 3px; overflow: hidden;
+    margin: 4px 0 16px 100px;
+}
+#lobby-level-bar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #4ade80, #facc15 70%, #f97316);
+    transition: width 0.08s linear;
+}
+.lobby-actions { display: flex; gap: 12px; margin-top: 22px; }
+.lobby-actions button {
+    flex: 1; padding: 14px; border-radius: 40px;
+    font-weight: 600; font-size: 1rem; cursor: pointer;
+    border: none; font-family: inherit;
+}
+.lobby-actions .btn-lobby-cancel { background: transparent; color: #aaa; border: 1px solid #555; }
+.lobby-actions .btn-lobby-join { background: #7c3aed; color: #fff; }
+.lobby-actions .btn-lobby-join:hover { background: #6d28d9; }
+.lobby-actions .btn-lobby-cancel:hover { background: #2a2a3a; color: #ddd; }
+
 </style>
     <script type="application/ld+json">
     {
@@ -333,6 +405,42 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         <div class="legal-links">
             <a href="/privacy">Конфиденциальность</a>
             <a href="/terms">Условия использования</a>
+        </div>
+    </div>
+
+    <div id="lobby-screen">
+        <div class="lobby-wrap">
+            <h2>Проверьте камеру и микрофон</h2>
+            <p class="lobby-sub">Убедитесь, что вас видно и слышно, затем войдите в комнату</p>
+
+            <div class="lobby-preview" id="lobby-preview-box">
+                <video id="lobby-video" autoplay playsinline muted></video>
+                <div class="no-video">Камера выключена</div>
+            </div>
+
+            <div class="lobby-row">
+                <label>🎤 Микрофон</label>
+                <select id="lobby-mic-select"></select>
+                <button class="tog on" id="lobby-mic-toggle" onclick="lobbyToggleMic()" title="Вкл/выкл микрофон">
+                    <svg id="lobby-mic-svg-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <svg id="lobby-mic-svg-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </button>
+            </div>
+            <div class="lobby-level"><div id="lobby-level-bar"></div></div>
+
+            <div class="lobby-row">
+                <label>📷 Камера</label>
+                <select id="lobby-cam-select"></select>
+                <button class="tog on" id="lobby-cam-toggle" onclick="lobbyToggleCam()" title="Вкл/выкл камеру">
+                    <svg id="lobby-cam-svg-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                    <svg id="lobby-cam-svg-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56"/></svg>
+                </button>
+            </div>
+
+            <div class="lobby-actions">
+                <button class="btn-lobby-cancel" onclick="cancelLobby()">Отмена</button>
+                <button class="btn-lobby-join" id="lobby-join-btn" onclick="confirmLobbyEntry()">Войти в комнату</button>
+            </div>
         </div>
     </div>
 

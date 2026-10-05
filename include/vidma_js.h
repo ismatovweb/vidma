@@ -91,20 +91,239 @@ async function joinRoom() {
 async function joinRoomById(roomId, name) {
     currentRoomId = roomId;
     currentName = name;
+    await showLobby(roomId, name);
+}
 
-    // Show call screen early, so user sees feedback
+// =====================================================================
+// Lobby — preview, device picker, audio level, separate permissions
+// =====================================================================
+const lobbyState = {
+    stream: null,
+    audioCtx: null,
+    analyser: null,
+    levelRaf: null,
+    micEnabled: true,
+    camEnabled: true,
+};
+
+function showLobby(roomId, name) {
+    currentRoomId = roomId;
+    currentName = name;
     document.getElementById('main-screen').style.display = 'none';
-    document.getElementById('call-screen').style.display = 'block';
-    document.getElementById('current-room-code').textContent = roomId;
-    setLocalVideoLabel(name + ' (Вы)');
+    document.getElementById('call-screen').style.display = 'none';
+    document.getElementById('lobby-screen').classList.add('active');
+    return startLobbyPreview();
+}
 
+async function startLobbyPreview() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        });
+        lobbyState.stream = stream;
+        lobbyState.micEnabled = true;
+        lobbyState.camEnabled = true;
+
+        const vid = document.getElementById('lobby-video');
+        vid.srcObject = stream;
+        document.getElementById('lobby-preview-box').classList.remove('no-video');
+        const micOn = document.getElementById('lobby-mic-svg-on');
+        const micOff = document.getElementById('lobby-mic-svg-off');
+        const camOn = document.getElementById('lobby-cam-svg-on');
+        const camOff = document.getElementById('lobby-cam-svg-off');
+        if (micOn) micOn.style.display = '';
+        if (micOff) micOff.style.display = 'none';
+        if (camOn) camOn.style.display = '';
+        if (camOff) camOff.style.display = 'none';
+        document.getElementById('lobby-mic-toggle').classList.add('on');
+        document.getElementById('lobby-mic-toggle').classList.remove('off');
+        document.getElementById('lobby-cam-toggle').classList.add('on');
+        document.getElementById('lobby-cam-toggle').classList.remove('off');
+
+        await populateLobbyDevices();
+        startAudioLevelMeter();
+    } catch (err) {
+        console.warn('Lobby: getUserMedia failed', err);
+        // Если пользователь отказал — просто показываем модалку выбора
+        const modal = document.getElementById('camera-choice-modal');
+        if (modal) modal.classList.add('active');
+    }
+}
+
+async function populateLobbyDevices() {
+    try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const micSel = document.getElementById('lobby-mic-select');
+        const camSel = document.getElementById('lobby-cam-select');
+        const currentMic = lobbyState.stream ? (lobbyState.stream.getAudioTracks()[0]?.getSettings().deviceId) : null;
+        const currentCam = lobbyState.stream ? (lobbyState.stream.getVideoTracks()[0]?.getSettings().deviceId) : null;
+
+        micSel.innerHTML = '';
+        camSel.innerHTML = '';
+
+        let micCount = 0, camCount = 0;
+        devices.forEach(d => {
+            if (d.kind === 'audioinput') {
+                micCount++;
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.textContent = d.label || ('Микрофон ' + micCount);
+                if (currentMic && d.deviceId === currentMic) opt.selected = true;
+                micSel.appendChild(opt);
+            } else if (d.kind === 'videoinput') {
+                camCount++;
+                const opt = document.createElement('option');
+                opt.value = d.deviceId;
+                opt.textContent = d.label || ('Камера ' + camCount);
+                if (currentCam && d.deviceId === currentCam) opt.selected = true;
+                camSel.appendChild(opt);
+            }
+        });
+
+        micSel.onchange = () => switchLobbyDevice('audio', micSel.value);
+        camSel.onchange = () => switchLobbyDevice('video', camSel.value);
+    } catch (e) {
+        console.warn('enumerateDevices failed', e);
+    }
+}
+
+async function switchLobbyDevice(kind, deviceId) {
+    if (!lobbyState.stream || !deviceId) return;
+    try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+            [kind]: { deviceId: { exact: deviceId } }
+        });
+        const newTrack = newStream.getTracks()[0];
+        // Убираем старые треки того же типа
+        lobbyState.stream.getTracks()
+            .filter(t => t.kind === kind)
+            .forEach(t => { lobbyState.stream.removeTrack(t); t.stop(); });
+        lobbyState.stream.addTrack(newTrack);
+
+        if (kind === 'video') {
+            document.getElementById('lobby-video').srcObject = lobbyState.stream;
+        } else {
+            startAudioLevelMeter();
+        }
+    } catch (e) {
+        console.warn('switchLobbyDevice failed', e);
+    }
+}
+
+function startAudioLevelMeter() {
+    if (!lobbyState.stream) return;
+    stopAudioLevelMeter();
+    const audioTracks = lobbyState.stream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        lobbyState.audioCtx = ctx;
+        const src = ctx.createMediaStreamSource(new MediaStream(audioTracks));
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        src.connect(analyser);
+        lobbyState.analyser = analyser;
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const bar = document.getElementById('lobby-level-bar');
+
+        const tick = () => {
+            if (!lobbyState.analyser) return;
+            analyser.getByteFrequencyData(data);
+            let sum = 0;
+            for (let i = 0; i < data.length; i++) sum += data[i];
+            const avg = sum / data.length;
+            const pct = Math.min(100, (avg / 128) * 100 * 2.2);
+            bar.style.width = pct + '%';
+            lobbyState.levelRaf = requestAnimationFrame(tick);
+        };
+        tick();
+    } catch (e) {
+        console.warn('audio meter failed', e);
+    }
+}
+
+function stopAudioLevelMeter() {
+    if (lobbyState.levelRaf) {
+        cancelAnimationFrame(lobbyState.levelRaf);
+        lobbyState.levelRaf = null;
+    }
+    if (lobbyState.audioCtx) {
+        try { lobbyState.audioCtx.close(); } catch (e) {}
+        lobbyState.audioCtx = null;
+    }
+    lobbyState.analyser = null;
+    const bar = document.getElementById('lobby-level-bar');
+    if (bar) bar.style.width = '0%';
+}
+
+function lobbyToggleMic() {
+    if (!lobbyState.stream) return;
+    lobbyState.micEnabled = !lobbyState.micEnabled;
+    lobbyState.stream.getAudioTracks().forEach(t => t.enabled = lobbyState.micEnabled);
+    const btn = document.getElementById('lobby-mic-toggle');
+    const on = document.getElementById('lobby-mic-svg-on');
+    const off = document.getElementById('lobby-mic-svg-off');
+    if (on) on.style.display = lobbyState.micEnabled ? '' : 'none';
+    if (off) off.style.display = lobbyState.micEnabled ? 'none' : '';
+    btn.classList.toggle('on', lobbyState.micEnabled);
+    btn.classList.toggle('off', !lobbyState.micEnabled);
+}
+
+function lobbyToggleCam() {
+    if (!lobbyState.stream) return;
+    lobbyState.camEnabled = !lobbyState.camEnabled;
+    lobbyState.stream.getVideoTracks().forEach(t => t.enabled = lobbyState.camEnabled);
+    const btn = document.getElementById('lobby-cam-toggle');
+    const on = document.getElementById('lobby-cam-svg-on');
+    const off = document.getElementById('lobby-cam-svg-off');
+    if (on) on.style.display = lobbyState.camEnabled ? '' : 'none';
+    if (off) off.style.display = lobbyState.camEnabled ? 'none' : '';
+    btn.classList.toggle('on', lobbyState.camEnabled);
+    btn.classList.toggle('off', !lobbyState.camEnabled);
+    document.getElementById('lobby-preview-box').classList.toggle('no-video', !lobbyState.camEnabled);
+}
+
+function cancelLobby() {
+    stopAudioLevelMeter();
+    if (lobbyState.stream) {
+        lobbyState.stream.getTracks().forEach(t => t.stop());
+        lobbyState.stream = null;
+    }
+    document.getElementById('lobby-screen').classList.remove('active');
+    document.getElementById('main-screen').style.display = 'block';
+    document.getElementById('lobby-video').srcObject = null;
+}
+
+async function confirmLobbyEntry() {
+    stopAudioLevelMeter();
+    // Важно: сохраняем состояние ПЕРЕД скрытием лобби
+    const stream = lobbyState.stream;
+    // Убеждаемся что треки физически в нужном состоянии
+    if (stream) {
+        stream.getVideoTracks().forEach(t => t.enabled = lobbyState.camEnabled);
+        stream.getAudioTracks().forEach(t => t.enabled = lobbyState.micEnabled);
+    }
+    document.getElementById('lobby-screen').classList.remove('active');
+    document.getElementById('call-screen').style.display = 'block';
+    document.getElementById('current-room-code').textContent = currentRoomId;
+    setLocalVideoLabel(currentName + ' (Вы)');
+    await connectToRoom(stream);
+}
+
+// =====================================================================
+// Real connection (uses already-obtained stream from lobby)
+// =====================================================================
+async function connectToRoom(preStream) {
     // 1. Get token from server
     let data;
     try {
-        const res = await fetch('/api/room/' + roomId + '/token', {
+        const res = await fetch('/api/room/' + currentRoomId + '/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
+            body: JSON.stringify({ name: currentName })
         });
         data = await res.json();
         if (!data.livekitUrl || !data.livekitToken) {
@@ -142,7 +361,7 @@ async function joinRoomById(roomId, name) {
         .on(RoomEvent.LocalTrackPublished, onLocalTrackPublished)
         .on(RoomEvent.DataReceived, onDataReceived);
 
-    // 4. Connect FIRST
+    // 4. Connect
     try {
         await room.connect(data.livekitUrl, data.livekitToken);
     } catch (e) {
@@ -151,16 +370,53 @@ async function joinRoomById(roomId, name) {
         return;
     }
 
-    // 5. THEN publish camera + mic
-    try {
-        await room.localParticipant.enableCameraAndMicrophone();
-    } catch (e) {
-        console.warn('Camera/mic unavailable:', e);
-        const modal = document.getElementById('camera-choice-modal');
-        if (modal) modal.classList.add('active');
-    }
-
     setSecurityBar(true);
+
+    // 5. Publish tracks we already obtained in lobby
+    if (preStream) {
+        for (const track of preStream.getVideoTracks()) {
+            try {
+                // КРИТИЧНО: сохраняем состояние ДО публикации
+                const wantEnabled = lobbyState.camEnabled;
+                track.enabled = wantEnabled;
+                await room.localParticipant.publishTrack(track, { source: Track.Source.Camera });
+                // SDK мог переопределить — выставляем после
+                track.enabled = wantEnabled;
+            } catch (e) { console.warn('publish video failed', e); }
+        }
+        for (const track of preStream.getAudioTracks()) {
+            try {
+                const wantEnabled = lobbyState.micEnabled;
+                track.enabled = wantEnabled;
+                await room.localParticipant.publishTrack(track, { source: Track.Source.Microphone });
+                track.enabled = wantEnabled;
+            } catch (e) { console.warn('publish audio failed', e); }
+        }
+
+        // Двойная страховка через LiveKit API
+        try {
+            if (!lobbyState.camEnabled) {
+                await room.localParticipant.setCameraEnabled(false);
+            }
+            if (!lobbyState.micEnabled) {
+                await room.localParticipant.setMicrophoneEnabled(false);
+            }
+        } catch (e) { console.warn('state sync failed', e); }
+
+        // Обновить кнопки в главном окне звонка
+        const camOn = document.getElementById('cam-icon-on');
+        const camOff = document.getElementById('cam-icon-off');
+        const micOn = document.getElementById('mic-icon-on');
+        const micOff = document.getElementById('mic-icon-off');
+        if (camOn && camOff) {
+            camOn.style.display = lobbyState.camEnabled ? '' : 'none';
+            camOff.style.display = lobbyState.camEnabled ? 'none' : '';
+        }
+        if (micOn && micOff) {
+            micOn.style.display = lobbyState.micEnabled ? '' : 'none';
+            micOff.style.display = lobbyState.micEnabled ? 'none' : '';
+        }
+    }
 
     // 6. Attach local video
     const camPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
@@ -665,6 +921,11 @@ window.createRoom = createRoom;
 window.copyRoomLink = copyRoomLink;
 window.joinCreatedRoom = joinCreatedRoom;
 window.joinRoom = joinRoom;
+window.showLobby = showLobby;
+window.lobbyToggleMic = lobbyToggleMic;
+window.lobbyToggleCam = lobbyToggleCam;
+window.cancelLobby = cancelLobby;
+window.confirmLobbyEntry = confirmLobbyEntry;
 window.toggleMic = toggleMic;
 window.toggleCam = toggleCam;
 window.toggleScreenShare = toggleScreenShare;
