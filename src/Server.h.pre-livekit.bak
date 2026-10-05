@@ -38,9 +38,6 @@ private:
     RoomManager roomManager_;
     unsigned short port_;
     std::string turnSecret_;
-    std::string livekitUrl_;
-    std::string livekitApiKey_;
-    std::string livekitApiSecret_;
     std::string turnHost_;
     int turnPort_;
     int turnTlsPort_;
@@ -76,60 +73,6 @@ private:
              (const unsigned char*)data.data(), data.size(),
              digest, &digestLen);
         return base64Encode(digest, digestLen);
-    }
-
-    
-    static std::string base64UrlEncode(const unsigned char* data, size_t len) {
-        std::string b64 = base64Encode(data, len);
-        while (!b64.empty() && b64.back() == '=') b64.pop_back();
-        for (char& c : b64) {
-            if (c == '+') c = '-';
-            else if (c == '/') c = '_';
-        }
-        return b64;
-    }
-
-    static std::string base64UrlEncode(const std::string& s) {
-        return base64UrlEncode((const unsigned char*)s.data(), s.size());
-    }
-
-    static std::string makeLiveKitJwt(
-        const std::string& apiKey,
-        const std::string& apiSecret,
-        const std::string& roomId,
-        const std::string& identity,
-        const std::string& name,
-        int ttlSeconds)
-    {
-        json header = {{"alg", "HS256"}, {"typ", "JWT"}};
-        std::string h = base64UrlEncode(header.dump());
-
-        int64_t now = (int64_t)std::time(nullptr);
-        json payload = {
-            {"iss", apiKey},
-            {"sub", identity},
-            {"nbf", now},
-            {"exp", now + ttlSeconds},
-            {"name", name},
-            {"video", {
-                {"room", roomId},
-                {"roomJoin", true},
-                {"canPublish", true},
-                {"canSubscribe", true}
-            }}
-        };
-        std::string p = base64UrlEncode(payload.dump());
-
-        std::string signingInput = h + "." + p;
-
-        unsigned char digest[EVP_MAX_MD_SIZE];
-        unsigned int digestLen = 0;
-        HMAC(EVP_sha256(),
-             apiSecret.data(), (int)apiSecret.size(),
-             (const unsigned char*)signingInput.data(), signingInput.size(),
-             digest, &digestLen);
-
-        return signingInput + "." + base64UrlEncode(digest, digestLen);
     }
 
     static std::string generateSecureSessionId() {
@@ -288,72 +231,13 @@ private:
             res.set_content(j.dump(), "application/json");
         });
 
-        httpServer_.Post("/api/room/create", [this](const httplib::Request& req, httplib::Response& res) {
+        httpServer_.Post("/api/room/create", [this](const httplib::Request&, httplib::Response& res) {
             std::string roomId = roomManager_.createRoom();
             logEvent("room_create id=" + roomId);
-
             json j;
             j["roomId"]          = roomId;
             j["success"]         = true;
             j["maxParticipants"] = MAX_PARTICIPANTS_PER_ROOM;
-
-            if (!livekitApiKey_.empty() && !livekitApiSecret_.empty()) {
-                std::string name = "\xd0\x93\xd0\xbe\xd1\x81\xd1\x82\xd1\x8c"; // "Гость"
-                try {
-                    if (!req.body.empty()) {
-                        json b = json::parse(req.body);
-                        std::string n = b.value("name", std::string());
-                        if (!n.empty() && isValidName(n)) name = n;
-                    }
-                } catch (...) {}
-                std::string identity = generateSecureSessionId();
-                std::string token = makeLiveKitJwt(livekitApiKey_, livekitApiSecret_,
-                                                   roomId, identity, name, 3600);
-                j["livekitUrl"]   = livekitUrl_;
-                j["livekitToken"] = token;
-                j["identity"]     = identity;
-            }
-
-            res.set_content(j.dump(), "application/json");
-        });
-
-        httpServer_.Post(R"(/api/room/([0-9\-]+)/token)", [this](const httplib::Request& req, httplib::Response& res) {
-            std::string roomId = req.matches[1];
-            if (!isValidRoomId(roomId)) {
-                res.status = 400;
-                res.set_content(R"({"error":"invalid_room_id"})", "application/json");
-                return;
-            }
-            if (!roomManager_.roomExists(roomId)) {
-                res.status = 404;
-                res.set_content(R"({"error":"room_not_found"})", "application/json");
-                return;
-            }
-            if (livekitApiKey_.empty() || livekitApiSecret_.empty()) {
-                res.status = 503;
-                res.set_content(R"({"error":"livekit_not_configured"})", "application/json");
-                return;
-            }
-
-            std::string name = "\xd0\x93\xd0\xbe\xd1\x81\xd1\x82\xd1\x8c";
-            try {
-                if (!req.body.empty()) {
-                    json b = json::parse(req.body);
-                    std::string n = b.value("name", std::string());
-                    if (!n.empty() && isValidName(n)) name = n;
-                }
-            } catch (...) {}
-
-            std::string identity = generateSecureSessionId();
-            std::string token = makeLiveKitJwt(livekitApiKey_, livekitApiSecret_,
-                                               roomId, identity, name, 3600);
-
-            json j;
-            j["roomId"]       = roomId;
-            j["livekitUrl"]   = livekitUrl_;
-            j["livekitToken"] = token;
-            j["identity"]     = identity;
-            res.set_header("Cache-Control", "no-store");
             res.set_content(j.dump(), "application/json");
         });
 
@@ -504,9 +388,6 @@ private:
 public:
     explicit VideoCallServer(unsigned short port = 8080) : port_(port) {
         const char* secret = std::getenv("TURN_SECRET");
-        if (const char* v = std::getenv("LIVEKIT_URL"))         livekitUrl_ = v;
-        if (const char* v = std::getenv("LIVEKIT_API_KEY"))     livekitApiKey_ = v;
-        if (const char* v = std::getenv("LIVEKIT_API_SECRET"))  livekitApiSecret_ = v;
         turnSecret_ = secret ? secret : "";
         const char* thost = std::getenv("TURN_HOST");
         turnHost_ = thost ? thost : "";

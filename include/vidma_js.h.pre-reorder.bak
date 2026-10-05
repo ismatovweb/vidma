@@ -142,22 +142,22 @@ async function joinRoomById(roomId, name) {
         .on(RoomEvent.LocalTrackPublished, onLocalTrackPublished)
         .on(RoomEvent.DataReceived, onDataReceived);
 
-    // 4. Connect FIRST
-    try {
-        await room.connect(data.livekitUrl, data.livekitToken);
-    } catch (e) {
-        alert('Не удалось подключиться к комнате: ' + e.message);
-        leaveCall();
-        return;
-    }
-
-    // 5. THEN publish camera + mic
+    // 4. Publish local camera + mic (ask permission)
     try {
         await room.localParticipant.enableCameraAndMicrophone();
     } catch (e) {
         console.warn('Camera/mic unavailable:', e);
         const modal = document.getElementById('camera-choice-modal');
         if (modal) modal.classList.add('active');
+    }
+
+    // 5. Connect
+    try {
+        await room.connect(data.livekitUrl, data.livekitToken);
+    } catch (e) {
+        alert('Не удалось подключиться к комнате: ' + e.message);
+        leaveCall();
+        return;
     }
 
     setSecurityBar(true);
