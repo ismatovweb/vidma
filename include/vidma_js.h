@@ -385,10 +385,43 @@ window.inviteEmail = inviteEmail;
 
 function showLobby(roomId, name) {
     currentRoomId = roomId;
-    currentName = name;
+
+    // Собираем имя из всех возможных источников
+    let candidate = '';
+    if (name && !isGuestName(name)) candidate = String(name).trim();
+    if (!candidate && currentName && !isGuestName(currentName)) candidate = String(currentName).trim();
+    if (!candidate) {
+        const cv = (document.getElementById('create-name')?.value || '').trim();
+        if (cv && !isGuestName(cv)) candidate = cv;
+    }
+    if (!candidate) {
+        const jv = (document.getElementById('join-name')?.value || '').trim();
+        if (jv && !isGuestName(jv)) candidate = jv;
+    }
+    if (!candidate) {
+        try {
+            const lv = (localStorage.getItem('vidma-name') || '').trim();
+            if (lv && !isGuestName(lv)) candidate = lv;
+        } catch (e) {}
+    }
+
+    currentName = candidate || 'Гость';
+    console.log('[showLobby] passed=%s resolved=%s', name, currentName);
+
     document.getElementById('main-screen').style.display = 'none';
     document.getElementById('call-screen').style.display = 'none';
     document.getElementById('lobby-screen').classList.add('active');
+
+    // Заполняем поле имени в лобби
+    const nameInput = document.getElementById('lobby-name-input');
+    if (nameInput) {
+        nameInput.value = candidate || '';
+        console.log('[showLobby] filled input with:', candidate || '(empty)');
+        if (!candidate) setTimeout(() => nameInput.focus(), 300);
+    } else {
+        console.warn('[showLobby] lobby-name-input NOT FOUND in DOM');
+    }
+
     return startLobbyPreview();
 }
 
@@ -575,10 +608,33 @@ function cancelLobby() {
 }
 
 async function confirmLobbyEntry() {
+    // ВАЖНО: имя берём из поля лобби — финальный источник правды
+    const nameInput = document.getElementById('lobby-name-input');
+    let finalName = '';
+    if (nameInput) {
+        finalName = (nameInput.value || '').trim();
+        console.log('[confirmLobbyEntry] input value:', finalName);
+    } else {
+        console.warn('[confirmLobbyEntry] lobby-name-input NOT FOUND');
+    }
+
+    if (!finalName || isGuestName(finalName)) {
+        if (currentName && !isGuestName(currentName)) {
+            finalName = String(currentName).trim();
+        } else {
+            finalName = 'Гость';
+        }
+    }
+
+    currentName = finalName;
+    try {
+        if (!isGuestName(finalName)) localStorage.setItem('vidma-name', finalName);
+    } catch (e) {}
+
+    console.log('[confirmLobbyEntry] FINAL name =', currentName);
+
     stopAudioLevelMeter();
-    // Важно: сохраняем состояние ПЕРЕД скрытием лобби
     const stream = lobbyState.stream;
-    // Убеждаемся что треки физически в нужном состоянии
     if (stream) {
         stream.getVideoTracks().forEach(t => t.enabled = lobbyState.camEnabled);
         stream.getAudioTracks().forEach(t => t.enabled = lobbyState.micEnabled);
@@ -594,8 +650,7 @@ async function confirmLobbyEntry() {
 // Real connection (uses already-obtained stream from lobby)
 // =====================================================================
 async function connectToRoom(preStream) {
-    // Re-resolve name defensively before fetching token
-    currentName = resolveName(currentName);
+    // currentName уже установлен confirmLobbyEntry — НЕ перезаписываем!
     console.log('[connectToRoom] name =', currentName);
 
     // 1. Get token from server

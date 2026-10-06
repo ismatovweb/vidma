@@ -308,6 +308,52 @@ private:
             res.set_content(VIDMA_JS, "application/javascript; charset=utf-8");
         });
 
+        httpServer_.Post("/api/livekit-webhook", [this](const httplib::Request& req, httplib::Response& res) {
+            try {
+                auto j = json::parse(req.body);
+                std::string event = j.value("event", std::string());
+
+                // room_started / room_finished
+                if (event == "room_started" || event == "room_finished") {
+                    std::string room = j.value("room", json::object()).value("name", std::string("?"));
+                    logEvent("lk_" + event + " room=" + room);
+                }
+                // participant_joined / participant_left
+                else if (event == "participant_joined" || event == "participant_left") {
+                    auto p = j.value("participant", json::object());
+                    std::string identity = p.value("identity", std::string("?"));
+                    std::string name = p.value("name", std::string("Гость"));
+                    std::string room = j.value("room", json::object()).value("name", std::string("?"));
+
+                    // sanitize
+                    std::string safe = sanitizeName(name);
+                    if (safe.empty()) safe = "Гость";
+
+                    if (event == "participant_joined") {
+                        roomManager_.ensureRoom(room);
+                        roomManager_.addParticipant(room, identity, safe);
+                        size_t cnt = roomManager_.getParticipantCount(room);
+                        logEvent("join room=" + room + " sid=" + identity + " name=" + safe +
+                                 " count=" + std::to_string(cnt));
+                    } else {
+                        size_t before = roomManager_.getParticipantCount(room);
+                        size_t rem = before > 0 ? before - 1 : 0;
+                        logEvent("leave room=" + room + " sid=" + identity + " name=" + safe +
+                                 " remaining=" + std::to_string(rem));
+                        roomManager_.removeParticipant(room, identity);
+                        if (rem == 0) {
+                            logEvent("room_closed id=" + room + " last_user=" + safe);
+                        }
+                    }
+                }
+
+                res.set_content(R"({"ok":true})", "application/json");
+            } catch (const std::exception& e) {
+                res.status = 400;
+                res.set_content(R"({"ok":false})", "application/json");
+            }
+        });
+
         httpServer_.Get("/api/health", [this](const httplib::Request&, httplib::Response& res) {
             json j;
             j["status"] = "ok";
@@ -517,7 +563,11 @@ private:
                             if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=') c = '_';
                         }
                         if (safeName.size() > 32) safeName = safeName.substr(0, 32);
-                        logEvent("join room=" + roomId + " sid=" + sessionId + " name=" + safeName);
+                        {
+                            size_t cnt = roomManager_.getParticipantCount(roomId);
+                            logEvent("join room=" + roomId + " sid=" + sessionId +
+                                     " name=" + safeName + " count=" + std::to_string(cnt));
+                        }
 
                         json joinedMsg;
                         joinedMsg["type"]             = "joined";
@@ -559,8 +609,18 @@ private:
                     if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=') c = '_';
                 }
                 if (safeName.size() > 32) safeName = safeName.substr(0, 32);
-                logEvent("leave room=" + roomId + " sid=" + sessionId + " name=" + safeName);
+                {
+                    size_t remaining = roomManager_.getParticipantCount(roomId);
+                    logEvent("leave room=" + roomId + " sid=" + sessionId +
+                             " name=" + safeName + " remaining=" + std::to_string(remaining));
+                }
                 roomManager_.removeParticipant(roomId, sessionId);
+                {
+                    size_t after = roomManager_.getParticipantCount(roomId);
+                    if (after == 0) {
+                        logEvent("room_closed id=" + roomId + " last_user=" + safeName);
+                    }
+                }
 
                 json left;
                 left["type"]      = "peer-left";

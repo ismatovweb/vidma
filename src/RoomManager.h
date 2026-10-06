@@ -72,6 +72,14 @@ public:
     RoomManager(const RoomManager&) = delete;
     RoomManager& operator=(const RoomManager&) = delete;
 
+    // Создаёт комнату с заданным ID, если её ещё нет (для webhook от LiveKit)
+    void ensureRoom(const std::string& roomId) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (rooms_.count(roomId) == 0) {
+            rooms_.emplace(roomId, Room(roomId));
+        }
+    }
+
     std::string createRoom() {
         std::lock_guard<std::mutex> lock(mutex_);
         std::string roomId;
