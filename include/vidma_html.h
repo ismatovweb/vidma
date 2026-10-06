@@ -606,6 +606,90 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     #cookie-banner .cb-actions .cb-btn { flex: 1; }
 }
 
+
+/* === Invite modal === */
+#invite-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+    display: none; align-items: center; justify-content: center;
+    z-index: 3000; padding: 20px;
+}
+#invite-modal.active { display: flex; }
+#invite-modal .im-card {
+    background: #1a1a24; border: 1px solid rgba(139,92,246,0.3);
+    border-radius: 20px; padding: 28px;
+    max-width: 440px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.7);
+}
+#invite-modal h3 {
+    margin: 0 0 6px; color: #fff; font-size: 1.3rem; text-align: center;
+}
+#invite-modal .im-sub {
+    color: #888; font-size: 0.9rem; text-align: center; margin-bottom: 20px;
+}
+#invite-modal .im-link-box {
+    display: flex; gap: 8px; margin-bottom: 20px;
+}
+#invite-modal .im-link {
+    flex: 1; background: #23232f; border: 1px solid #333;
+    color: #a78bfa; padding: 11px 14px; border-radius: 10px;
+    font-size: 0.9rem; font-family: inherit;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+#invite-modal .im-copy {
+    background: #7c3aed; color: #fff; border: none;
+    padding: 0 16px; border-radius: 10px; font-weight: 600;
+    cursor: pointer; white-space: nowrap; font-family: inherit;
+    transition: background 0.15s;
+}
+#invite-modal .im-copy:hover { background: #6d28d9; }
+#invite-modal .im-options {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 20px;
+}
+#invite-modal .im-opt {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; border-radius: 12px;
+    background: #23232f; border: 1px solid #333;
+    color: #e0e0e0; font-family: inherit; font-size: 0.92rem;
+    cursor: pointer; transition: all 0.15s; text-align: left;
+}
+#invite-modal .im-opt:hover {
+    background: #2f2f3f; border-color: #8b5cf6;
+    transform: translateY(-1px);
+}
+#invite-modal .im-opt svg {
+    width: 22px; height: 22px; flex-shrink: 0;
+}
+#invite-modal .im-opt.tg svg { fill: #0088cc; }
+#invite-modal .im-opt.wa svg { fill: #25D366; }
+#invite-modal .im-opt.email svg { stroke: #a78bfa; fill: none; }
+#invite-modal .im-close {
+    width: 100%; background: transparent; color: #888;
+    border: 1px solid #555; padding: 12px; border-radius: 10px;
+    cursor: pointer; font-family: inherit; font-size: 0.9rem;
+    transition: all 0.15s;
+}
+#invite-modal .im-close:hover { color: #ddd; border-color: #888; }
+
+
+.lobby-name-row {
+    margin-bottom: 16px;
+}
+.lobby-name-row label {
+    display: block; color: #aaa; font-size: 0.85rem;
+    margin-bottom: 6px;
+}
+.lobby-name-row input {
+    width: 100%; padding: 12px 16px;
+    background: #23232f; border: 1px solid #444;
+    color: #fff; border-radius: 12px;
+    font-family: inherit; font-size: 1rem;
+    outline: none; transition: border-color 0.15s;
+}
+.lobby-name-row input:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(139,92,246,0.2); }
+.lobby-name-row input::placeholder { color: #666; }
+
 </style>
     <script type="application/ld+json">
     {
@@ -621,6 +705,39 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     <link rel="preload" as="image" href="/logo.png">
 </head>
 <body>
+<div id="invite-modal">
+    <div class="im-card">
+        <h3 data-i18n="invite.title">Invite friends</h3>
+        <p class="im-sub" data-i18n="invite.subtitle">Share this link with anyone you want to talk to</p>
+
+        <div class="im-link-box">
+            <div class="im-link" id="invite-link">https://vidma.online/</div>
+            <button class="im-copy" onclick="inviteCopy()" data-i18n="invite.copy">Copy</button>
+        </div>
+
+        <div class="im-options">
+            <button class="im-opt tg" onclick="inviteTelegram()">
+                <svg viewBox="0 0 24 24"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13.3 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+                <span>Telegram</span>
+            </button>
+            <button class="im-opt wa" onclick="inviteWhatsApp()">
+                <svg viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                <span>WhatsApp</span>
+            </button>
+            <button class="im-opt email" onclick="inviteEmail()">
+                <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+                <span>Email</span>
+            </button>
+            <button class="im-opt" onclick="inviteCopy()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span data-i18n="invite.copy">Copy</span>
+            </button>
+        </div>
+
+        <button class="im-close" onclick="closeInviteModal()" data-i18n="invite.close">Close</button>
+    </div>
+</div>
+
 <div id="cookie-banner">
     <div class="cb-text">
         <span data-i18n="cookie.text">We use only essential cookies and local storage for your language, chat history and consent. No tracking. Details in</span>
@@ -675,7 +792,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
                 <button class="btn btn-primary" onclick="createRoom()" data-i18n="btn.createRoom">Create room</button>
                 <div class="room-display" id="room-created">
                     <p data-i18n="room.code">Meeting code:</p><div class="room-id-display" id="created-room-id"></div>
-                    <button class="btn btn-outline" onclick="copyRoomLink()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> <span data-i18n="btn.copyLink">Copy link</span></button>
+                    <button class="btn btn-outline" onclick="openInviteModal()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> <span data-i18n="invite.button">Invite</span></button>
                     <button class="btn btn-primary" style="margin-top: 12px;" onclick="joinCreatedRoom()" data-i18n="btn.enterRoom">Enter room</button>
                 </div>
             </div>
@@ -703,6 +820,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         <div class="lobby-wrap">
             <h2 data-i18n="lobby.title">Check camera and microphone</h2>
             <p class="lobby-sub" data-i18n="lobby.subtitle">Make sure you are seen and heard, then join the room</p>
+            <div class="lobby-name-row">
+                <label data-i18n="label.yourName">Your name</label>
+                <input type="text" id="lobby-name-input" placeholder="Guest" data-i18n-placeholder="placeholder.guest" maxlength="50" autocomplete="name" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmLobbyEntry();}">
+            </div>
 
             <div class="lobby-preview" id="lobby-preview-box">
                 <video id="lobby-video" autoplay playsinline muted></video>
@@ -747,7 +868,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             </div>
             <div class="room-info-bar" id="room-info-bar">
                 <span data-i18n="call.room">Room</span><span class="room-code" id="current-room-code"></span>
-                <button class="share-btn" onclick="shareRoomFromCall()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> <span data-i18n="btn.copyLink">Copy link</span></button>
+                <button class="share-btn" onclick="openInviteModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> <span data-i18n="invite.button">Invite</span></button>
             </div>
         </div>
         <div id="videos-container">

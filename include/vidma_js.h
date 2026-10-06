@@ -314,6 +314,75 @@ function maybeShowCookieBanner() {
 }
 window.acceptCookies = acceptCookies;
 
+
+// =====================================================================
+// Invite modal
+// =====================================================================
+function openInviteModal() {
+    const roomId = currentRoomId || '';
+    const link = roomId
+        ? 'https://vidma.online/?room=' + roomId
+        : 'https://vidma.online/';
+    const linkEl = document.getElementById('invite-link');
+    if (linkEl) linkEl.textContent = link;
+    const modal = document.getElementById('invite-modal');
+    if (modal) modal.classList.add('active');
+}
+
+function closeInviteModal() {
+    const modal = document.getElementById('invite-modal');
+    if (modal) modal.classList.remove('active');
+}
+
+function getInviteLink() {
+    if (currentRoomId) return 'https://vidma.online/?room=' + currentRoomId;
+    return 'https://vidma.online/';
+}
+
+function getInviteText() {
+    const t = (typeof i18nT === 'function') ? i18nT('invite.message') : 'Join my Vidma call:';
+    return t + '\n' + getInviteLink();
+}
+
+function inviteCopy() {
+    navigator.clipboard.writeText(getInviteText()).then(() => {
+        showToast((typeof i18nT === 'function') ? i18nT('toast.linkCopied') : 'Link copied!');
+    });
+}
+
+function inviteTelegram() {
+    const url = 'https://t.me/share/url?url=' + encodeURIComponent(getInviteLink()) +
+                '&text=' + encodeURIComponent((typeof i18nT === 'function') ? i18nT('invite.message') : 'Join my Vidma call');
+    window.open(url, '_blank');
+}
+
+function inviteWhatsApp() {
+    const url = 'https://wa.me/?text=' + encodeURIComponent(getInviteText());
+    window.open(url, '_blank');
+}
+
+function inviteEmail() {
+    const subject = (typeof i18nT === 'function') ? i18nT('invite.emailSubject') : 'Join my Vidma call';
+    const body = getInviteText();
+    window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
+}
+
+// Close on backdrop click
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('invite-modal');
+    if (modal && e.target === modal) closeInviteModal();
+});
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeInviteModal();
+});
+
+window.openInviteModal = openInviteModal;
+window.closeInviteModal = closeInviteModal;
+window.inviteCopy = inviteCopy;
+window.inviteTelegram = inviteTelegram;
+window.inviteWhatsApp = inviteWhatsApp;
+window.inviteEmail = inviteEmail;
+
 function showLobby(roomId, name) {
     currentRoomId = roomId;
     currentName = name;
@@ -1474,7 +1543,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         else if (digits.length === 6) fmt = digits.slice(0,3)+'-'+digits.slice(3,6)+'-';
         else if (digits.length >= 4) fmt = digits.slice(0,3)+'-'+digits.slice(3);
         else if (digits.length === 3) fmt = digits+'-';
-        inp.value = fmt;
+
+        // Проверяем что комната существует, потом открываем лобби
+        if (digits.length === 9) {
+            fetch('/api/room/' + fmt + '/exists')
+                .then(r => r.json())
+                .then(d => {
+                    if (d && d.exists) {
+                        const savedName = localStorage.getItem('vidma-name') || '';
+                        console.log('[auto-lobby] room exists, opening lobby for', fmt, 'savedName=', savedName);
+                        showLobby(fmt, savedName || '');
+                    } else {
+                        inp.value = fmt;
+                    }
+                })
+                .catch(() => { inp.value = fmt; });
+        } else {
+            inp.value = fmt;
+        }
     }
 });
 
