@@ -155,11 +155,59 @@ private:
         return true;
     }
 
+    // Убирает всё опасное из имени: HTML-теги, control chars, угловые скобки
+    static std::string sanitizeName(const std::string& input) {
+        if (input.empty()) return "";
+        std::string out;
+        out.reserve(input.size());
+
+        // Проходим по UTF-8 байтам и выкидываем опасные
+        for (size_t i = 0; i < input.size(); ) {
+            unsigned char c = (unsigned char)input[i];
+
+            // Управляющие символы (0x00–0x1F, 0x7F) — выкидываем
+            if (c < 0x20 || c == 0x7F) { i++; continue; }
+
+            // Угловые скобки, амперсанд, кавычки, обратный слэш — выкидываем
+            if (c == '<' || c == '>' || c == '&' || c == '"' || c == '\'' || c == '\\') {
+                i++; continue;
+            }
+
+            // Для UTF-8 многобайтных — пропускаем байты как есть, но ограничиваем
+            if (c >= 0x80) {
+                // Определяем длину UTF-8 последовательности
+                int len = 1;
+                if ((c & 0xE0) == 0xC0) len = 2;
+                else if ((c & 0xF0) == 0xE0) len = 3;
+                else if ((c & 0xF8) == 0xF0) len = 4;
+
+                if (i + len > input.size()) { i++; continue; }
+                // Пропускаем всю последовательность
+                for (int k = 0; k < len; k++) out.push_back(input[i + k]);
+                i += len;
+                continue;
+            }
+
+            out.push_back((char)c);
+            i++;
+        }
+
+        // Trim
+        while (!out.empty() && (out.back() == ' ' || out.back() == '\t')) out.pop_back();
+        while (!out.empty() && (out.front() == ' ' || out.front() == '\t')) out.erase(out.begin());
+
+        // Ограничиваем длину
+        if (out.size() > MAX_NAME_LENGTH) out = out.substr(0, MAX_NAME_LENGTH);
+
+        // Если после очистки пусто — вернём пустую строку
+        return out;
+    }
+
     static bool isValidName(const std::string& s) {
         if (s.empty() || s.size() > MAX_NAME_LENGTH) return false;
         for (unsigned char c : s) {
             if (c < 0x20 && c != '\t') return false;
-            if (c == 0x7f) return false;
+            if (c == 0x7F) return false;
         }
         return true;
     }
@@ -333,7 +381,10 @@ private:
                     if (!req.body.empty()) {
                         json b = json::parse(req.body);
                         std::string n = b.value("name", std::string());
-                        if (!n.empty() && isValidName(n)) name = n;
+                        if (!n.empty()) {
+                        std::string cleaned = sanitizeName(n);
+                        if (!cleaned.empty() && isValidName(cleaned)) name = cleaned;
+                    }
                     }
                 } catch (...) {}
                 std::string identity = generateSecureSessionId();
@@ -370,7 +421,10 @@ private:
                 if (!req.body.empty()) {
                     json b = json::parse(req.body);
                     std::string n = b.value("name", std::string());
-                    if (!n.empty() && isValidName(n)) name = n;
+                    if (!n.empty()) {
+                        std::string cleaned = sanitizeName(n);
+                        if (!cleaned.empty() && isValidName(cleaned)) name = cleaned;
+                    }
                 }
             } catch (...) {}
 

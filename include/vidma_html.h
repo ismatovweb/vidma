@@ -690,6 +690,271 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 .lobby-name-row input:focus { border-color: #7c3aed; box-shadow: 0 0 0 3px rgba(139,92,246,0.2); }
 .lobby-name-row input::placeholder { color: #666; }
 
+
+/* === Landing sections === */
+.landing-section {
+    margin-top: 80px;
+    text-align: center;
+}
+.landing-section h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 12px;
+    letter-spacing: -0.02em;
+}
+.landing-section .section-sub {
+    color: #888;
+    font-size: 1rem;
+    margin-bottom: 40px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: left;
+}
+.feature-card {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 20px;
+    padding: 26px 22px;
+    transition: all 0.25s ease;
+}
+.feature-card:hover {
+    border-color: rgba(139,92,246,0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -10px rgba(139,92,246,0.35);
+}
+.feature-card .fc-icon {
+    width: 46px; height: 46px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(167,139,250,0.1));
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 16px;
+    color: #a78bfa;
+}
+.feature-card .fc-icon svg { width: 24px; height: 24px; }
+.feature-card h3 {
+    font-size: 1.1rem;
+    color: #fff;
+    margin: 0 0 8px;
+    font-weight: 600;
+}
+.feature-card p {
+    color: #999;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    margin: 0;
+}
+
+.steps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    max-width: 900px;
+    margin: 0 auto;
+    text-align: center;
+}
+.step {
+    padding: 20px;
+    position: relative;
+}
+.step .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    color: #fff;
+    font-weight: 700;
+    font-size: 1.4rem;
+    margin-bottom: 16px;
+    box-shadow: 0 10px 24px -6px rgba(139,92,246,0.5);
+}
+.step h3 {
+    font-size: 1.05rem;
+    color: #fff;
+    margin: 0 0 6px;
+    font-weight: 600;
+}
+.step p {
+    color: #888;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.faq-list {
+    max-width: 720px;
+    margin: 0 auto;
+    text-align: left;
+}
+.faq-item {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 14px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color 0.15s;
+}
+.faq-item:hover { border-color: rgba(139,92,246,0.4); }
+.faq-item[open] { border-color: rgba(139,92,246,0.6); }
+.faq-item summary {
+    padding: 16px 20px;
+    color: #e0e0e0;
+    font-weight: 500;
+    font-size: 0.98rem;
+    cursor: pointer;
+    list-style: none;
+    position: relative;
+    padding-right: 44px;
+    user-select: none;
+}
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after {
+    content: '+';
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #a78bfa;
+    font-size: 1.4rem;
+    font-weight: 300;
+    transition: transform 0.2s;
+}
+.faq-item[open] summary::after {
+    content: '−';
+    transform: translateY(-50%) rotate(0deg);
+}
+.faq-item .faq-answer {
+    padding: 0 20px 18px;
+    color: #999;
+    font-size: 0.92rem;
+    line-height: 1.6;
+}
+
+@media (max-width: 640px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .landing-section { margin-top: 50px; }
+    .landing-section h2 { font-size: 1.5rem; }
+    .landing-section .section-sub { font-size: 0.92rem; margin-bottom: 28px; }
+    .feature-card { padding: 20px 18px; }
+    .step .step-num { width: 46px; height: 46px; font-size: 1.15rem; }
+}
+
+
+/* === Mobile UX (max-width: 640px) === */
+@media (max-width: 640px) {
+    body { padding: 12px 14px 100px; }
+
+    /* Header / Logo */
+    header { margin-bottom: 24px; }
+    .logo {
+        font-size: 2.2rem !important;
+        gap: 10px !important;
+    }
+    .logo img { width: 52px !important; height: 52px !important; border-radius: 14px !important; }
+    .subtitle { font-size: 1rem; margin-top: 4px; }
+
+    /* Badges */
+    .privacy-badge {
+        padding: 6px 14px !important;
+        font-size: 0.82rem !important;
+        gap: 6px !important;
+        margin-bottom: 10px !important;
+        max-width: 100%;
+        text-align: center;
+        line-height: 1.35;
+    }
+    .privacy-badge svg { width: 14px; height: 14px; flex-shrink: 0; }
+
+    /* Language switcher — фикс на мобильном */
+    #vidma-lang-root { top: 12px !important; right: 12px !important; }
+    #vidma-lang-btn { padding: 6px 10px 6px 8px !important; font-size: 0.8rem !important; gap: 6px !important; }
+    #vidma-lang-btn .vflag { width: 18px !important; height: 13px !important; }
+    #vidma-lang-btn #vidma-current-name { display: none; }  /* только флаг */
+    #vidma-lang-menu { min-width: 160px !important; }
+
+    /* Cards */
+    .cards { gap: 16px; margin-top: 20px; }
+    .card {
+        padding: 22px 18px !important;
+        border-radius: 22px !important;
+    }
+    .card h2 { font-size: 1.35rem !important; margin-bottom: 16px !important; }
+
+    /* Inputs & buttons */
+    input, textarea {
+        padding: 14px 16px !important;
+        font-size: 1rem !important;   /* 16px — нет зума в iOS */
+        border-radius: 14px !important;
+    }
+    .btn {
+        padding: 16px !important;
+        font-size: 1rem !important;
+        border-radius: 30px !important;
+        min-height: 52px;
+    }
+
+    /* Room display */
+    .room-id-display {
+        font-size: 1.6rem !important;
+        letter-spacing: 2px !important;
+        padding: 6px 14px !important;
+    }
+
+    /* Footer / links */
+    .footer-note { margin-top: 28px; font-size: 0.85rem; }
+    .support-link { font-size: 0.8rem; }
+    .legal-links { font-size: 0.78rem; }
+    .legal-links a { margin: 0 6px; }
+
+    /* Landing sections */
+    .landing-section { margin-top: 44px !important; }
+    .landing-section h2 { font-size: 1.45rem !important; }
+    .feature-card { padding: 20px 18px !important; }
+    .feature-card h3 { font-size: 1rem !important; }
+    .feature-card p { font-size: 0.88rem !important; }
+    .step h3 { font-size: 1rem; }
+    .faq-item summary { padding: 14px 16px !important; padding-right: 44px !important; font-size: 0.92rem !important; }
+    .faq-item .faq-answer { padding: 0 16px 16px !important; font-size: 0.88rem !important; }
+
+    /* Cookie banner */
+    #cookie-banner {
+        left: 12px !important; right: 12px !important; bottom: 12px !important;
+        padding: 14px 16px !important;
+        flex-direction: column;
+        align-items: stretch;
+        font-size: 0.85rem;
+    }
+    #cookie-banner .cb-actions { display: flex; gap: 8px; }
+    #cookie-banner .cb-btn { flex: 1; padding: 12px; font-size: 0.9rem; }
+}
+
+/* === Very small phones (max-width: 400px) === */
+@media (max-width: 400px) {
+    .logo { font-size: 1.9rem !important; }
+    .logo img { width: 44px !important; height: 44px !important; }
+    .card { padding: 18px 14px !important; }
+    .card h2 { font-size: 1.2rem !important; }
+    .room-id-display { font-size: 1.35rem !important; }
+}
+
+/* === Landscape phones (max-height: 500px) === */
+@media (orientation: landscape) and (max-height: 500px) {
+    header { margin-bottom: 12px; }
+    .logo { font-size: 1.6rem !important; }
+    .logo img { width: 40px !important; height: 40px !important; }
+    .privacy-badge { display: none; }   /* скрываем на низкой высоте */
+}
+
 </style>
     <script type="application/ld+json">
     {
@@ -803,6 +1068,93 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
                 <button class="btn btn-primary" onclick="joinRoom()" data-i18n="btn.join">Join</button>
             </div>
         </div>
+        
+        <!-- === FEATURES === -->
+        <section class="landing-section">
+            <h2 data-i18n="landing.features.title">Why Vidma</h2>
+            <p class="section-sub" data-i18n="landing.features.subtitle">Simple, private, and works right in your browser</p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="fc-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <h3 data-i18n="landing.features.encrypted.title">Encrypted end-to-end</h3>
+                    <p data-i18n="landing.features.encrypted.text">TLS 1.3 for signalling, DTLS-SRTP for media, E2EE for chat. No recordings, no history.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                    </div>
+                    <h3 data-i18n="landing.features.instant.title">Instant meetings</h3>
+                    <p data-i18n="landing.features.instant.text">Create a room in one click and share the link. No registration, no download, no email.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    </div>
+                    <h3 data-i18n="landing.features.chat.title">Chat + screen share</h3>
+                    <p data-i18n="landing.features.chat.text">Message anyone in the call, share your screen, switch cameras. All from the same tab.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="fc-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    </div>
+                    <h3 data-i18n="landing.features.langs.title">8 languages</h3>
+                    <p data-i18n="landing.features.langs.text">English, Русский, Español, Deutsch, Français, 中文, 日本語, Português — switch anytime.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- === HOW IT WORKS === -->
+        <section class="landing-section">
+            <h2 data-i18n="landing.how.title">How it works</h2>
+            <p class="section-sub" data-i18n="landing.how.subtitle">Get on a call in under 10 seconds</p>
+            <div class="steps-grid">
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <h3 data-i18n="landing.how.step1.title">Create a room</h3>
+                    <p data-i18n="landing.how.step1.text">Enter your name and press Create. You get a link instantly.</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <h3 data-i18n="landing.how.step2.title">Share the link</h3>
+                    <p data-i18n="landing.how.step2.text">Send it via Telegram, WhatsApp, email, or copy manually.</p>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <h3 data-i18n="landing.how.step3.title">Talk</h3>
+                    <p data-i18n="landing.how.step3.text">Friends click the link, check their camera, and join the room.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- === FAQ === -->
+        <section class="landing-section">
+            <h2 data-i18n="landing.faq.title">Frequently asked questions</h2>
+            <div class="faq-list">
+                <details class="faq-item">
+                    <summary data-i18n="landing.faq.q1">Do I need to register?</summary>
+                    <div class="faq-answer" data-i18n="landing.faq.a1">No. Vidma is completely free and requires no account. Just enter a name (or leave it as Guest) and start a call.</div>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="landing.faq.q2">Are my calls private?</summary>
+                    <div class="faq-answer" data-i18n="landing.faq.a2">Yes. Video and audio are encrypted end-to-end using DTLS-SRTP. We never record calls or store call history. Chat is E2EE via LiveKit DataChannel.</div>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="landing.faq.q3">How many people can join a room?</summary>
+                    <div class="faq-answer" data-i18n="landing.faq.a3">Up to 20 participants per room. For larger meetings, contact us.</div>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="landing.faq.q4">Does it work on mobile?</summary>
+                    <div class="faq-answer" data-i18n="landing.faq.a4">Yes. Vidma works on iPhone, iPad, Android phones and tablets through any modern browser. No app required.</div>
+                </details>
+                <details class="faq-item">
+                    <summary data-i18n="landing.faq.q5">Is Vidma open source?</summary>
+                    <div class="faq-answer" data-i18n="landing.faq.a5">Yes. The full source code is available on GitHub under AGPL-3.0 license. Self-host it, modify it, or contribute back.</div>
+                </details>
+            </div>
+        </section>
+
         <div class="footer-note">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             <span data-i18n="footer.noHistory">We don't store call history and don't require installation.</span>
