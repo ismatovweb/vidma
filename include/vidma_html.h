@@ -369,6 +369,66 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 .remote-video-wrapper.showing-screen video { object-fit: contain; }
 
 
+/* === Dynamic video grid === */
+#remote-videos-grid {
+    display: grid;
+    gap: 10px;
+    align-items: start;
+    justify-items: stretch;
+    align-content: start;
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+.remote-video-wrapper {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    background: #1a1a2a;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.remote-video-wrapper video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Screen share tile — отдельная плитка, занимает 2 колонки */
+.remote-video-wrapper.screen-tile {
+    grid-column: span 2;
+    aspect-ratio: 16 / 10;
+}
+.remote-video-wrapper.screen-tile video {
+    object-fit: contain;
+    background: #000;
+}
+.remote-video-wrapper.screen-tile .video-label {
+    background: rgba(124,58,237,0.9);
+    font-weight: 600;
+    padding: 4px 12px;
+}
+
+@media (max-width: 600px) {
+    #remote-videos-grid {
+        gap: 6px;
+        padding: 6px;
+    }
+    .remote-video-wrapper {
+        border-radius: 12px;
+    }
+    .remote-video-wrapper.screen-tile {
+        grid-column: span 1;
+        aspect-ratio: 16 / 9;
+    }
+}
+
 /* === Active speaker glow === */
 .remote-video-wrapper.speaking,
 #local-video-container.speaking {
@@ -955,6 +1015,56 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     .privacy-badge { display: none; }   /* скрываем на низкой высоте */
 }
 
+
+/* === Top bar collapse === */
+#toggle-bars-btn {
+    position: fixed;
+    top: 8px;
+    right: 8px;
+    z-index: 2000;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(20,20,30,0.75);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #ddd;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    font-size: 1rem;
+    transition: transform 0.2s, background 0.15s;
+}
+#toggle-bars-btn:hover {
+    background: rgba(40,40,60,0.9);
+}
+#toggle-bars-btn.collapsed svg {
+    transform: rotate(180deg);
+}
+#toggle-bars-btn svg {
+    width: 16px;
+    height: 16px;
+    transition: transform 0.25s ease;
+}
+.top-bar.collapsed {
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+}
+.top-bar {
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+@media (max-width: 600px) {
+    #toggle-bars-btn {
+        top: 6px;
+        right: 6px;
+        width: 28px;
+        height: 28px;
+    }
+}
+
 </style>
     <script type="application/ld+json">
     {
@@ -1272,6 +1382,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             </button>
         </div>
     </div>
+
+    <button id="toggle-bars-btn" onclick="toggleTopBars()" title="Скрыть/показать панели">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
 
     <div class="toast" id="toast"></div>
 

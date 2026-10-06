@@ -18,6 +18,7 @@ let selectedRating = 0;
 
 // map: participantIdentity -> { wrapperEl, videoEl, stream }
 const remotePanels = new Map();
+const remoteScreenPanels = new Map();  // отдельные панели для трансляции экрана
 
 // ---------------------------------------------------------------------
 // util
@@ -382,6 +383,40 @@ window.inviteCopy = inviteCopy;
 window.inviteTelegram = inviteTelegram;
 window.inviteWhatsApp = inviteWhatsApp;
 window.inviteEmail = inviteEmail;
+
+
+// =====================================================================
+// Top bars collapse (mobile-friendly)
+// =====================================================================
+function toggleTopBars() {
+    const topBar = document.querySelector('#call-screen .top-bar');
+    const btn = document.getElementById('toggle-bars-btn');
+    if (!topBar || !btn) return;
+    const isCollapsed = topBar.classList.toggle('collapsed');
+    btn.classList.toggle('collapsed', isCollapsed);
+    try { localStorage.setItem('vidma-topbars-collapsed', isCollapsed ? '1' : '0'); } catch (e) {}
+    console.log('[topbar] collapsed =', isCollapsed);
+}
+
+function initTopBarsState() {
+    const topBar = document.querySelector('#call-screen .top-bar');
+    const btn = document.getElementById('toggle-bars-btn');
+    if (!topBar || !btn) return;
+    let collapsed = false;
+    try {
+        const saved = localStorage.getItem('vidma-topbars-collapsed');
+        if (saved === '1') collapsed = true;
+        else if (saved === '0') collapsed = false;
+        else collapsed = window.innerWidth < 600;
+    } catch (e) {
+        collapsed = window.innerWidth < 600;
+    }
+    topBar.classList.toggle('collapsed', collapsed);
+    btn.classList.toggle('collapsed', collapsed);
+}
+
+window.toggleTopBars = toggleTopBars;
+window.initTopBarsState = initTopBarsState;
 
 function showLobby(roomId, name) {
     currentRoomId = roomId;
@@ -1064,15 +1099,55 @@ function stopSpeakerGlow(identity) {
     speakGlowTimers.delete(identity);
 }
 
+
+// =====================================================================
+// Dynamic grid layout
+// =====================================================================
+function updateGridLayout() {
+    const grid = document.getElementById('remote-videos-grid');
+    if (!grid) return;
+    const total = remotePanels.size + remoteScreenPanels.size;
+    if (total === 0) return;
+
+    const w = window.innerWidth;
+    let cols;
+    if (w < 600) {
+        cols = total <= 4 ? 1 : 2;              // mobile: 1 или 2 колонки
+    } else if (w < 900) {
+        cols = total === 1 ? 1 : (total <= 4 ? 2 : 3);  // tablet
+    } else {
+        if (total === 1) cols = 1;
+        else if (total <= 4) cols = 2;
+        else if (total <= 6) cols = 3;
+        else if (total <= 9) cols = 3;
+        else if (total <= 12) cols = 4;
+        else if (total <= 16) cols = 4;
+        else cols = 5;
+    }
+    grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
+    grid.dataset.cols = String(cols);
+    document.querySelectorAll('.screen-tile').forEach(el => {
+        el.style.gridColumn = (w < 600) ? 'span 1' : 'span 2';
+    });
+    console.log('[grid] tiles=' + total + ' cols=' + cols + ' w=' + w);
+}
+
+let __gridResizeTimer = null;
+window.addEventListener('resize', () => {
+    if (__gridResizeTimer) clearTimeout(__gridResizeTimer);
+    __gridResizeTimer = setTimeout(updateGridLayout, 150);
+});
+
 function attachParticipant(participant) {
     const id = participant.identity;
-    const label = participant.name || id.slice(0, 6);
+    const displayName = participant.name || id.slice(0, 6);
 
-    let panel = remotePanels.get(id);
-    if (!panel) {
+    // ============ CAMERA TILE ============
+    let camPanel = remotePanels.get(id);
+    if (!camPanel) {
         const wrapper = document.createElement('div');
         wrapper.id = 'remote-' + id;
-        wrapper.className = 'remote-video-wrapper';
+        wrapper.className = 'remote-video-wrapper camera-tile';
 
         const video = document.createElement('video');
         video.autoplay = true;
@@ -1080,16 +1155,14 @@ function attachParticipant(participant) {
 
         const lbl = document.createElement('div');
         lbl.className = 'video-label';
-        lbl.textContent = label;
+        lbl.textContent = displayName;
 
-        // Кнопка fullscreen в углу
         const fsBtn = document.createElement('button');
         fsBtn.className = 'fullscreen-btn';
-        fsBtn.title = i18nT('call.fullscreen');
+        fsBtn.title = 'Fullscreen';
         fsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
         fsBtn.onclick = (e) => { e.stopPropagation(); toggleFullscreen(wrapper); };
 
-        // Аватар (для camera off)
         const av = document.createElement('div');
         av.className = 'video-avatar';
         av.innerHTML = '<div class="avatar-circle"></div>';
@@ -1102,169 +1175,98 @@ function attachParticipant(participant) {
         attachDoubleTapFullscreen(wrapper);
         document.getElementById('remote-videos-grid').appendChild(wrapper);
 
-        panel = { wrapperEl: wrapper, videoEl: video, labelEl: lbl, stream: new MediaStream(), name: participant.name || '' };
-        remotePanels.set(id, panel);
-        console.log('[panel-create]', { id: id, name: participant.name, stored: panel.name });
-
-        // Запустить подсветку при речи
+        camPanel = { wrapperEl: wrapper, videoEl: video, labelEl: lbl, stream: new MediaStream(), name: participant.name || '' };
+        remotePanels.set(id, camPanel);
         startSpeakerGlow(participant, wrapper);
     }
 
-    // Attach all currently subscribed tracks.
-    // Screen share has higher priority than camera: if present, replace main video.
+    // ============ SCREEN TILE ============
     let hasScreenShare = false;
     let hasCamera = false;
     participant.trackPublications.forEach(pub => {
+        if (pub.isSubscribed && pub.track) {
+            if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare) hasScreenShare = true;
+            if (pub.kind === 'video' && pub.source === Track.Source.Camera) hasCamera = true;
+        }
+    });
+
+    let screenPanel = remoteScreenPanels.get(id);
+    if (hasScreenShare && !screenPanel) {
+        const wrapper = document.createElement('div');
+        wrapper.id = 'remote-screen-' + id;
+        wrapper.className = 'remote-video-wrapper screen-tile';
+        wrapper.style.order = '-1';
+
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.playsInline = true;
+
+        const lbl = document.createElement('div');
+        lbl.className = 'video-label';
+        lbl.textContent = '\uD83D\uDCFA ' + i18nT('call.screen') + ' \u2014 ' + displayName;
+
+        const fsBtn = document.createElement('button');
+        fsBtn.className = 'fullscreen-btn';
+        fsBtn.title = 'Fullscreen';
+        fsBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>';
+        fsBtn.onclick = (e) => { e.stopPropagation(); toggleFullscreen(wrapper); };
+
+        wrapper.appendChild(video);
+        wrapper.appendChild(lbl);
+        wrapper.appendChild(fsBtn);
+        attachDoubleTapFullscreen(wrapper);
+        document.getElementById('remote-videos-grid').appendChild(wrapper);
+
+        screenPanel = { wrapperEl: wrapper, videoEl: video, labelEl: lbl };
+        remoteScreenPanels.set(id, screenPanel);
+        console.log('[screen-tile] created for', id);
+    } else if (!hasScreenShare && screenPanel) {
+        try { screenPanel.wrapperEl.remove(); } catch (e) {}
+        remoteScreenPanels.delete(id);
+        screenPanel = null;
+        console.log('[screen-tile] removed for', id);
+    }
+
+    // ============ ATTACH TRACKS ============
+    participant.trackPublications.forEach(pub => {
         if (!pub.isSubscribed || !pub.track) return;
         if (pub.kind === 'audio') {
-            pub.track.attach(panel.videoEl);
+            pub.track.attach(camPanel.videoEl);
             return;
         }
-        if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare) {
-            hasScreenShare = true;
-            pub.track.attach(panel.videoEl);
-            panel.labelEl.textContent = (participant.name || id.slice(0,6)) + ' (' + i18nT('call.screen') + ')';
-            panel.wrapperEl.classList.add('showing-screen');
+        if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare && screenPanel) {
+            pub.track.attach(screenPanel.videoEl);
+            return;
+        }
+        if (pub.kind === 'video' && pub.source === Track.Source.Camera) {
+            pub.track.attach(camPanel.videoEl);
         }
     });
-    // Camera — only if no screen share active
-    if (!hasScreenShare) {
-        participant.trackPublications.forEach(pub => {
-            if (!pub.isSubscribed || !pub.track) return;
-            if (pub.kind === 'video' && pub.source === Track.Source.Camera) {
-                hasCamera = true;
-                pub.track.attach(panel.videoEl);
-                panel.labelEl.textContent = participant.name || id.slice(0,6);
-                panel.wrapperEl.classList.remove('showing-screen');
-            }
-        });
-    }
 
-    // Аватар показываем, если нет НИ камеры, НИ screen share
-    const anyVideo = hasScreenShare || hasCamera;
-    setAvatarVisible(panel.wrapperEl, !anyVideo);
+    // Avatar виден только если камеры нет
+    setAvatarVisible(camPanel.wrapperEl, !hasCamera);
 
-    // Обновляем сохранённое имя, если participant.name пришло (не теряем при unpublish)
-    if (participant.name && participant.name.trim()) {
-        panel.name = participant.name;
-    }
-    const nameForAvatar = panel.name || participant.name || '';
-    console.log('[avatar-update]', {
-        identity: participant.identity,
-        participantName: participant.name,
-        storedName: panel.name,
-        hasCamera: hasCamera,
-        hasScreenShare: hasScreenShare,
-        showAvatar: !anyVideo
-    });
-    const av = panel.wrapperEl.querySelector('.video-avatar');
+    if (participant.name && participant.name.trim()) camPanel.name = participant.name;
+    const nameForAvatar = camPanel.name || participant.name || '';
+    const av = camPanel.wrapperEl.querySelector('.video-avatar');
     if (av) renderAvatarInto(av, nameForAvatar, isGuestName(nameForAvatar));
+
+    updateGridLayout();
 }
 
 function detachParticipant(identity) {
-    const panel = remotePanels.get(identity);
-    stopSpeakerGlow(identity);
-    if (!panel) return;
-    try {
-        panel.videoEl.srcObject = null;
-        panel.wrapperEl.remove();
-    } catch (e) {}
-    remotePanels.delete(identity);
-}
-
-// ---------------------------------------------------------------------
-// controls
-// ---------------------------------------------------------------------
-async function toggleMic() {
-    if (!room) return;
-    const wasEnabled = room.localParticipant.isMicrophoneEnabled;
-    try {
-        if (wasEnabled) {
-            const pub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-            if (pub && pub.track) {
-                try { await room.localParticipant.unpublishTrack(pub.track, true); } catch (e) {}
-                try { pub.track.stop(); } catch (e) {}
-            }
-        } else {
-            await room.localParticipant.setMicrophoneEnabled(true);
-        }
-        const micOn = document.getElementById('mic-icon-on');
-        const micOff = document.getElementById('mic-icon-off');
-        if (micOn && micOff) {
-            micOn.style.display = wasEnabled ? 'none' : '';
-            micOff.style.display = wasEnabled ? '' : 'none';
-        }
-    } catch (e) { console.warn('toggleMic failed', e); }
-}
-
-async function toggleCam() {
-    if (!room) return;
-    const wasEnabled = room.localParticipant.isCameraEnabled;
-    const btn = document.getElementById('toggle-cam');
-    if (btn) btn.disabled = true;
-    try {
-        if (wasEnabled) {
-            // Правильный путь: unpublish + LocalTrack.stop()
-            // LocalTrack.stop() останавливает физический MediaStreamTrack
-            // И корректно чистит состояние SDK → LED гаснет
-            const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-            if (pub && pub.track) {
-                try { await room.localParticipant.unpublishTrack(pub.track, true); } catch (e) {}
-                try { pub.track.stop(); } catch (e) {}
-            }
-            const lv = document.getElementById('local-video');
-            if (lv) lv.srcObject = null;
-        } else {
-            // setCameraEnabled(true) захватывает СВЕЖИЙ трек
-            await room.localParticipant.setCameraEnabled(true);
-            await new Promise(r => setTimeout(r, 250));
-            const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
-            const lv = document.getElementById('local-video');
-            if (pub && pub.videoTrack && lv) {
-                pub.videoTrack.attach(lv);
-            }
-        }
-        const camOn = document.getElementById('cam-icon-on');
-        const camOff = document.getElementById('cam-icon-off');
-        if (camOn && camOff) {
-            camOn.style.display = wasEnabled ? 'none' : '';
-            camOff.style.display = wasEnabled ? '' : 'none';
-        }
-        // Local avatar: показать если камера выкл
-        const localAv = document.getElementById('local-video-avatar');
-        if (localAv) {
-            if (wasEnabled) {
-                renderAvatarInto(localAv, currentName || '', isGuestName(currentName));
-                localAv.classList.add('visible');
-            } else {
-                localAv.classList.remove('visible');
-            }
-        }
-    } catch (e) {
-        console.warn('toggleCam failed', e);
-    } finally {
-        if (btn) btn.disabled = false;
+    const camPanel = remotePanels.get(identity);
+    if (camPanel) {
+        stopSpeakerGlow(identity);
+        try { camPanel.videoEl.srcObject = null; camPanel.wrapperEl.remove(); } catch (e) {}
+        remotePanels.delete(identity);
     }
-}
-
-async function toggleScreenShare() {
-    if (!room) return;
-    const btn = document.getElementById('toggle-screen');
-    const currently = room.localParticipant.isScreenShareEnabled;
-    try {
-        await room.localParticipant.setScreenShareEnabled(!currently, {
-            videoEncoding: {
-                maxBitrate: 2_500_000,
-                maxFramerate: 30
-            },
-            simulcast: true,
-            degradationPreference: 'maintain-resolution'
-        });
-        if (btn) btn.classList.toggle('active', !currently);
-    } catch (e) {
-        console.warn('Screen share failed:', e);
-        alert(i18nT('error.screenShare') + ' ' + e.message);
+    const screenPanel = remoteScreenPanels.get(identity);
+    if (screenPanel) {
+        try { screenPanel.videoEl.srcObject = null; screenPanel.wrapperEl.remove(); } catch (e) {}
+        remoteScreenPanels.delete(identity);
     }
+    updateGridLayout();
 }
 
 function leaveCall() {
@@ -1287,6 +1289,8 @@ function leaveCallUI() {
     // remove all remote panels
     remotePanels.forEach(p => { try { p.wrapperEl.remove(); } catch (e) {} });
     remotePanels.clear();
+    remoteScreenPanels.forEach(p => { try { p.wrapperEl.remove(); } catch (e) {} });
+    remoteScreenPanels.clear();
 
     setSecurityBar(false);
     document.getElementById('call-screen').style.display = 'none';
@@ -1629,6 +1633,80 @@ window.lobbyToggleMic = lobbyToggleMic;
 window.lobbyToggleCam = lobbyToggleCam;
 window.cancelLobby = cancelLobby;
 window.confirmLobbyEntry = confirmLobbyEntry;
+// =====================================================================
+// Media controls (mic / cam / screen share)
+// =====================================================================
+async function toggleMic() {
+    if (!room) return;
+    const wasEnabled = room.localParticipant.isMicrophoneEnabled;
+    try {
+        await room.localParticipant.setMicrophoneEnabled(!wasEnabled);
+        const micOn = document.getElementById('mic-icon-on');
+        const micOff = document.getElementById('mic-icon-off');
+        if (micOn) micOn.style.display = wasEnabled ? 'none' : '';
+        if (micOff) micOff.style.display = wasEnabled ? '' : 'none';
+        const btn = document.getElementById('toggle-mic');
+        if (btn) btn.classList.toggle('off', wasEnabled);
+        console.log('[toggleMic]', { was: wasEnabled, now: !wasEnabled });
+    } catch (e) {
+        console.warn('toggleMic failed', e);
+    }
+}
+
+async function toggleCam() {
+    if (!room) return;
+    const wasEnabled = room.localParticipant.isCameraEnabled;
+    try {
+        await room.localParticipant.setCameraEnabled(!wasEnabled);
+
+        if (!wasEnabled) {
+            // При включении — переприкрепить локальное превью (SDK создал свежий трек)
+            await new Promise(r => setTimeout(r, 200));
+            const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+            const lv = document.getElementById('local-video');
+            if (pub && pub.videoTrack && lv) pub.videoTrack.attach(lv);
+        }
+
+        const camOn = document.getElementById('cam-icon-on');
+        const camOff = document.getElementById('cam-icon-off');
+        if (camOn) camOn.style.display = wasEnabled ? 'none' : '';
+        if (camOff) camOff.style.display = wasEnabled ? '' : 'none';
+
+        // Локальный аватар — показать при выключенной камере
+        const localAv = document.getElementById('local-video-avatar');
+        if (localAv) {
+            if (wasEnabled) {
+                renderAvatarInto(localAv, currentName || '', isGuestName(currentName));
+                localAv.classList.add('visible');
+            } else {
+                localAv.classList.remove('visible');
+            }
+        }
+        const btn = document.getElementById('toggle-cam');
+        if (btn) btn.classList.toggle('off', wasEnabled);
+        console.log('[toggleCam]', { was: wasEnabled, now: !wasEnabled });
+    } catch (e) {
+        console.warn('toggleCam failed', e);
+    }
+}
+
+async function toggleScreenShare() {
+    if (!room) return;
+    const currently = room.localParticipant.isScreenShareEnabled;
+    const btn = document.getElementById('toggle-screen');
+    try {
+        await room.localParticipant.setScreenShareEnabled(!currently, {
+            videoEncoding: { maxBitrate: 2_500_000, maxFramerate: 30 },
+            audio: true
+        });
+        if (btn) btn.classList.toggle('active', !currently);
+        console.log('[toggleScreenShare]', { was: currently, now: !currently });
+    } catch (e) {
+        console.warn('Screen share failed:', e);
+        alert('Не удалось начать трансляцию: ' + e.message);
+    }
+}
+
 window.toggleMic = toggleMic;
 window.toggleCam = toggleCam;
 window.toggleScreenShare = toggleScreenShare;
@@ -1639,9 +1717,6 @@ window.retryCamera = retryCamera;
 window.joinWithoutCamera = joinWithoutCamera;
 window.shareRoomFromCall = copyRoomLink;
 window.i18nSetLang = i18nSetLang;
-window.toggleLangMenu = toggleLangMenu;
-window.pickLang = pickLang;
-window.closeLangMenu = closeLangMenu;
 window.i18nT = i18nT;
 window.toggleChatPanel = toggleChatPanel;
 window.handleChatSubmit = handleChatSubmit;
