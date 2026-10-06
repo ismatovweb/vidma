@@ -557,10 +557,10 @@ async function connectToRoom(preStream) {
 
     // 2. Create room
     room = new Room({
-        adaptiveStream: false,
+        adaptiveStream: true,
         dynacast: true,
         videoCaptureDefaults: {
-            resolution: { width: 1920, height: 1080, frameRate: 30 }
+            resolution: { width: 1280, height: 720, frameRate: 30 }
         },
         audioCaptureDefaults: {
             echoCancellation: true,
@@ -613,7 +613,7 @@ async function connectToRoom(preStream) {
                     source: Track.Source.Camera,
                     simulcast: true,
                     videoEncoding: {
-                        maxBitrate: 3_000_000,
+                        maxBitrate: 1_500_000,
                         maxFramerate: 30
                     },
                     degradationPreference: 'maintain-resolution'
@@ -1130,7 +1130,7 @@ async function toggleScreenShare() {
     try {
         await room.localParticipant.setScreenShareEnabled(!currently, {
             videoEncoding: {
-                maxBitrate: 4_000_000,
+                maxBitrate: 2_500_000,
                 maxFramerate: 30
             },
             simulcast: true,
