@@ -575,6 +575,37 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     #vidma-lang-menu { min-width: 160px; }
 }
 
+
+#cookie-banner {
+    position: fixed; left: 20px; right: 20px; bottom: 20px;
+    max-width: 720px; margin: 0 auto;
+    background: rgba(26,26,36,0.97); backdrop-filter: blur(14px);
+    border: 1px solid rgba(139,92,246,0.35); border-radius: 16px;
+    padding: 18px 22px; z-index: 5000;
+    display: none; align-items: center; gap: 16px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    font-size: 0.92rem; color: #e0e0e0;
+}
+#cookie-banner.show { display: flex; }
+#cookie-banner .cb-text { flex: 1; line-height: 1.5; }
+#cookie-banner .cb-text a { color: #a78bfa; }
+#cookie-banner .cb-btn {
+    background: #7c3aed; color: #fff; border: none;
+    padding: 10px 22px; border-radius: 40px; font-weight: 600;
+    font-size: 0.9rem; cursor: pointer; white-space: nowrap;
+    font-family: inherit;
+}
+#cookie-banner .cb-btn:hover { background: #6d28d9; }
+#cookie-banner .cb-btn.secondary {
+    background: transparent; border: 1px solid #555; color: #bbb;
+    margin-left: 6px;
+}
+@media (max-width: 600px) {
+    #cookie-banner { flex-direction: column; align-items: stretch; text-align: center; }
+    #cookie-banner .cb-actions { display: flex; gap: 8px; }
+    #cookie-banner .cb-actions .cb-btn { flex: 1; }
+}
+
 </style>
     <script type="application/ld+json">
     {
@@ -590,6 +621,16 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     <link rel="preload" as="image" href="/logo.png">
 </head>
 <body>
+<div id="cookie-banner">
+    <div class="cb-text">
+        <span data-i18n="cookie.text">We use only essential cookies and local storage for your language, chat history and consent. No tracking. Details in</span>
+        <a href="/privacy" data-i18n="legal.privacy">Privacy</a>.
+    </div>
+    <div class="cb-actions">
+        <button class="cb-btn" onclick="acceptCookies()" data-i18n="cookie.accept">Accept</button>
+    </div>
+</div>
+
 <div id="vidma-lang-root" style="position:absolute;top:20px;right:20px;z-index:1000;font-family:inherit;">
     <button id="vidma-lang-btn" type="button" onclick="vidmaToggleLang(event)" aria-haspopup="listbox" aria-expanded="false" style="display:flex;align-items:center;gap:8px;background:rgba(30,30,45,0.9);backdrop-filter:blur(14px);color:#e0e0e0;border:1px solid rgba(139,92,246,0.35);border-radius:100px;padding:8px 14px 8px 12px;font-size:0.9rem;font-weight:500;cursor:pointer;outline:none;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
         <span class="vflag" id="vidma-current-flag" style="display:inline-block;width:22px;height:15px;border-radius:3px;overflow:hidden;flex-shrink:0;"><svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#012169"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#fff" stroke-width="3.2"/><path d="M0,0 L24,16 M24,0 L0,16" stroke="#C8102E" stroke-width="1.6"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#fff" stroke-width="5.3"/><path d="M12,0 L12,16 M0,8 L24,8" stroke="#C8102E" stroke-width="3.2"/></svg></span>

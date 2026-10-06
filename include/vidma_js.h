@@ -295,6 +295,25 @@ window.vidmaCloseLang = vidmaCloseLang;
 window.vidmaPickLang = vidmaPickLang;
 window.vidmaUpdateLangUI = vidmaUpdateLangUI;
 
+
+// =====================================================================
+// Cookie consent
+// =====================================================================
+function acceptCookies() {
+    try { localStorage.setItem('vidma-cookie-consent', '1'); } catch (e) {}
+    const b = document.getElementById('cookie-banner');
+    if (b) b.classList.remove('show');
+}
+function maybeShowCookieBanner() {
+    let consent = null;
+    try { consent = localStorage.getItem('vidma-cookie-consent'); } catch (e) {}
+    if (!consent) {
+        const b = document.getElementById('cookie-banner');
+        if (b) setTimeout(() => b.classList.add('show'), 800);
+    }
+}
+window.acceptCookies = acceptCookies;
+
 function showLobby(roomId, name) {
     currentRoomId = roomId;
     currentName = name;
@@ -1416,6 +1435,7 @@ async function joinWithoutCamera() {
 // ---------------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', async () => {
     await i18nLoad();
+    maybeShowCookieBanner();
     // Разбудить AudioContext при первом клике — политика браузера
     const resumeAudio = () => {
         try {
