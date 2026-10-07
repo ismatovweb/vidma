@@ -81,7 +81,14 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             color: #a78bfa;
             border: 1px solid rgba(139,92,246,0.2);
         }
-        .subtitle { color: #888; font-size: 1.2rem; font-weight: 400; margin-top: 8px; }
+        .subtitle {
+    color: #a78bfa;
+    font-size: 24px;
+    font-weight: 600;
+    margin-top: 8px;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+}
         .cards { display: flex; flex-wrap: wrap; justify-content: center; gap: 30px; margin-top: 30px; }
         .card {
             background: #1e1e1e;
@@ -138,12 +145,12 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             border-radius: 60px;
             display: inline-block;
         }
-        .footer-note { margin-top: 40px; font-size: 0.9rem; color: #666; }
-        .support-link { margin-top: 8px; font-size: 0.85rem; color: #666; }
+        
+        
         .support-link span { color: #8b5cf6; }
-        .legal-links { margin-top: 16px; font-size: 0.8rem; }
-        .legal-links a { color: #888; text-decoration: none; margin: 0 10px; }
-        .legal-links a:hover { color: #a78bfa; }
+        
+        
+        
 
         #call-screen { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #0b0b12; z-index: 1000; }
         .top-bar { position: fixed; top: 0; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; padding: 10px 16px; z-index: 45; pointer-events: none; }
@@ -771,47 +778,13 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     margin-left: auto;
     margin-right: auto;
 }
-.features-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 24px;
-    max-width: 720px;
-    margin: 0 auto;
-    text-align: left;
-}
-.feature-card {
-    background: #1a1a24;
-    border: 1px solid #2a2a3a;
-    border-radius: 20px;
-    padding: 26px 22px;
-    transition: all 0.25s ease;
-}
-.feature-card:hover {
-    border-color: rgba(139,92,246,0.5);
-    transform: translateY(-3px);
-    box-shadow: 0 12px 30px -10px rgba(139,92,246,0.35);
-}
-.feature-card .fc-icon {
-    width: 46px; height: 46px;
-    border-radius: 14px;
-    background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(167,139,250,0.1));
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 16px;
-    color: #a78bfa;
-}
+
+
+
+
 .feature-card .fc-icon svg { width: 24px; height: 24px; }
-.feature-card h3 {
-    font-size: 1.1rem;
-    color: #fff;
-    margin: 0 0 8px;
-    font-weight: 600;
-}
-.feature-card p {
-    color: #999;
-    font-size: 0.92rem;
-    line-height: 1.55;
-    margin: 0;
-}
+
+
 
 .steps-grid {
     display: grid;
@@ -907,7 +880,8 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     .landing-section .section-sub { font-size: 0.92rem; margin-bottom: 28px; }
     .feature-card { padding: 20px 18px; }
     .step .step-num { width: 46px; height: 46px; font-size: 1.15rem; }
-}
+
+    .subtitle { font-size: 18px; margin-top: 4px; }}
 
 
 /* === Mobile UX (max-width: 640px) === */
@@ -972,15 +946,15 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 
     /* Footer / links */
     .footer-note { margin-top: 28px; font-size: 0.85rem; }
-    .support-link { font-size: 0.8rem; }
-    .legal-links { font-size: 0.78rem; }
-    .legal-links a { margin: 0 6px; }
+    
+    
+    
 
     /* Landing sections */
     .landing-section { margin-top: 44px !important; }
     .landing-section h2 { font-size: 1.45rem !important; }
     .feature-card { padding: 20px 18px !important; }
-    .feature-card h3 { font-size: 1rem !important; }
+    
     .feature-card p { font-size: 0.88rem !important; }
     .step h3 { font-size: 1rem; }
     .faq-item summary { padding: 14px 16px !important; padding-right: 44px !important; font-size: 0.92rem !important; }
@@ -1022,6 +996,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     top: 8px;
     right: 8px;
     z-index: 2000;
+    display: none;
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -1030,7 +1005,7 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     border: 1px solid rgba(255,255,255,0.12);
     color: #ddd;
     cursor: pointer;
-    display: flex;
+    
     align-items: center;
     justify-content: center;
     padding: 0;
@@ -1062,6 +1037,541 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         right: 6px;
         width: 28px;
         height: 28px;
+    }
+}
+
+
+#toggle-bars-btn.visible {
+    display: flex !important;
+}
+
+/* Жёсткое правило: кнопка видна ТОЛЬКО когда есть .visible И находимся в звонке */
+
+
+
+/* === Features (4 cols, compact) === */
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    max-width: 960px;
+    margin: 0 auto;
+    text-align: center;
+}
+.feature-card {
+    background: #1a1a24;
+    border: 1px solid #2a2a3a;
+    border-radius: 18px;
+    padding: 22px 14px;
+    transition: all 0.25s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+}
+.feature-card:hover {
+    border-color: rgba(139,92,246,0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 30px -10px rgba(139,92,246,0.35);
+}
+.feature-card .fc-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(167,139,250,0.1));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #a78bfa;
+    flex-shrink: 0;
+}
+.feature-card .fc-icon svg { width: 22px; height: 22px; }
+.feature-card h3 {
+    font-size: 0.95rem;
+    color: #fff;
+    margin: 0;
+    font-weight: 600;
+    line-height: 1.3;
+}
+.feature-card p {
+    display: block;
+    font-size: 0.72rem;
+    color: #777;
+    line-height: 1.4;
+    margin: 0;
+    text-align: center;
+    max-width: 200px;
+}
+
+@media (max-width: 900px) {
+    .features-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+    .features-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .feature-card { padding: 16px 10px; border-radius: 14px; }
+    .feature-card .fc-icon { width: 38px; height: 38px; }
+    .feature-card .fc-icon svg { width: 18px; height: 18px; }
+    .feature-card h3 { font-size: 0.85rem; }
+}
+
+.footer-note {
+    margin-top: 60px;
+    padding-top: 24px;
+    border-top: 1px solid #222;
+    font-size: 0.85rem;
+    color: #777;
+    text-align: center;
+    line-height: 1.6;
+}
+.footer-note a {
+    color: #999;
+    text-decoration: none;
+    margin: 0 4px;
+    transition: color 0.15s;
+}
+.footer-note a:hover {
+    color: #a78bfa;
+}
+@media (max-width: 640px) {
+    .footer-note {
+        margin-top: 40px;
+        font-size: 0.78rem;
+        padding-top: 18px;
+    }
+}
+
+/* === Noise suppression toggle === */
+.lobby-noise-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    margin-top: 4px;
+    border-top: 1px solid #2a2a3a;
+    color: #ddd;
+    font-size: 0.9rem;
+}
+.lobby-noise-row .nr-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #aaa;
+}
+.lobby-noise-row .nr-label svg { width: 18px; height: 18px; stroke: #a78bfa; }
+.lobby-noise-row .nr-toggle {
+    position: relative;
+    width: 46px;
+    height: 26px;
+    border-radius: 14px;
+    background: #333;
+    border: 1px solid #444;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+.lobby-noise-row .nr-toggle.on { background: #7c3aed; border-color: #7c3aed; }
+.lobby-noise-row .nr-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform 0.2s;
+}
+.lobby-noise-row .nr-toggle.on::after { transform: translateX(20px); }
+.lobby-noise-row .nr-toggle.disabled {
+    opacity: 0.4; cursor: not-allowed;
+}
+.lobby-noise-row .nr-hint {
+    font-size: 0.7rem; color: #666; margin-left: 6px;
+}
+
+
+/* === Noise sensitivity slider === */
+
+
+
+
+
+
+
+
+
+/* === Noise sensitivity slider (pretty) === */
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* === Per-participant volume control === */
+
+
+
+
+
+
+/* Popup slider */
+
+
+
+
+
+
+
+
+
+/* === Per-participant volume control (v3) === */
+.remote-video-wrapper .tile-volume-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(10px);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 7;
+    opacity: 0.8;
+    transition: opacity 0.15s, background 0.15s, transform 0.15s;
+    padding: 0;
+}
+.remote-video-wrapper .tile-volume-btn:hover {
+    opacity: 1;
+    background: rgba(124,58,237,0.9);
+    transform: scale(1.08);
+}
+.remote-video-wrapper .tile-volume-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+.remote-video-wrapper .tile-volume-btn.muted {
+    background: rgba(220,38,38,0.85);
+}
+
+/* Popup */
+.remote-video-wrapper .tile-volume-popup {
+    position: absolute;
+    top: 50px;
+    right: 8px;
+    width: 260px;
+    background: rgba(20,20,30,0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(139,92,246,0.4);
+    border-radius: 18px;
+    padding: 16px;
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    z-index: 8;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.6);
+}
+.remote-video-wrapper.volume-open .tile-volume-popup {
+    display: flex;
+    animation: volFadeIn 0.15s ease-out;
+}
+@keyframes volFadeIn {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.tv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.tv-header .tv-name {
+    font-size: 0.85rem;
+    color: #ccc;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+}
+.tv-header .tv-val {
+    font-size: 1rem;
+    color: #a78bfa;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
+}
+
+.tv-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.tv-slider-row .tv-icon {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    color: #a78bfa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0.85;
+}
+.tv-slider-row .tv-icon:hover { opacity: 1; }
+.tv-slider-row .tv-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+
+
+
+
+.tv-presets {
+    display: flex;
+    gap: 6px;
+    justify-content: space-between;
+}
+.tv-presets button {
+    flex: 1;
+    background: #2a2a3a;
+    color: #aaa;
+    border: 1px solid #333;
+    border-radius: 10px;
+    padding: 6px 0;
+    font-size: 0.78rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.tv-presets button:hover {
+    background: #3a3a4f;
+    color: #fff;
+    border-color: rgba(139,92,246,0.5);
+}
+.tv-presets button.active {
+    background: rgba(124,58,237,0.35);
+    color: #fff;
+    border-color: #7c3aed;
+}
+
+@media (max-width: 600px) {
+    .remote-video-wrapper .tile-volume-popup {
+        width: 240px;
+        padding: 14px;
+        top: 46px;
+    }
+    .remote-video-wrapper .tile-volume-btn {
+        width: 30px;
+        height: 30px;
+    }
+}
+
+
+/* === Smart grid layouts (1-3 participants) === */
+#remote-videos-grid[data-count="1"] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 5vw;
+    gap: 0;
+}
+#remote-videos-grid[data-count="1"] > .remote-video-wrapper {
+    width: min(1400px, 88vw, calc(75vh * 16 / 9));
+    aspect-ratio: 16 / 9;
+    flex: 0 0 auto;
+    margin: 0 auto;
+}
+
+#remote-videos-grid[data-count="2"] {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr;
+    gap: 12px;
+    padding: 4vh 3vw;
+    align-items: center;
+    justify-items: center;
+}
+#remote-videos-grid[data-count="2"] > .remote-video-wrapper {
+    width: 100%;
+    max-width: 720px;
+    aspect-ratio: 16 / 9;
+}
+
+#remote-videos-grid[data-count="3"] > :nth-child(2),
+#remote-videos-grid[data-count="3"] > :nth-child(3) {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+}
+
+/* Мобилка — компактнее */
+@media (max-width: 640px) {
+    #remote-videos-grid[data-count="1"] {
+        padding: 3vh 3vw;
+    }
+    #remote-videos-grid[data-count="1"] > .remote-video-wrapper {
+        width: min(100%, calc(55vh * 16 / 9));
+    }
+    #remote-videos-grid[data-count="2"] {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr 1fr;
+        gap: 8px;
+        padding: 2vh 2vw;
+    }
+    
+    
+}
+
+/* Landscape mobile */
+@media (orientation: landscape) and (max-height: 500px) {
+    #remote-videos-grid[data-count="1"] > .remote-video-wrapper {
+        width: min(100%, calc(80vh * 16 / 9));
+    }
+}
+
+
+/* === Volume slider (precise fill) === */
+.tv-slider-wrapper {
+    position: relative;
+    flex: 1;
+    height: 22px;
+    display: flex;
+    align-items: center;
+}
+.tv-slider-track {
+    position: absolute;
+    left: 0; right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    pointer-events: none;
+    overflow: hidden;
+}
+.tv-slider-fill {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, #7c3aed 0%, #a78bfa 100%);
+    border-radius: 3px;
+    transition: width 0.06s linear;
+}
+.tv-slider-wrapper input[type="range"] {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    outline: none;
+    cursor: pointer;
+    margin: 0;
+    padding: 0;
+    z-index: 2;
+}
+.tv-slider-wrapper input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.35), 0 3px 8px rgba(0,0,0,0.5);
+    cursor: grab;
+    transition: transform 0.1s, box-shadow 0.15s;
+}
+.tv-slider-wrapper input[type="range"]::-webkit-slider-thumb:active {
+    cursor: grabbing;
+    transform: scale(1.15);
+    box-shadow: 0 0 0 5px rgba(124,58,237,0.5), 0 3px 8px rgba(0,0,0,0.6);
+}
+.tv-slider-wrapper input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    background: #fff;
+    border: none;
+    border-radius: 50%;
+    box-shadow: 0 0 0 3px rgba(124,58,237,0.35), 0 3px 8px rgba(0,0,0,0.5);
+    cursor: grab;
+}
+
+
+/* === 3 participants: 3 in row, fallback to 2+1 === */
+#remote-videos-grid[data-count="3"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: 1fr;
+    gap: 12px;
+    padding: 4vh 3vw;
+    align-items: center;
+    justify-items: center;
+}
+#remote-videos-grid[data-count="3"] > .remote-video-wrapper {
+    width: 100%;
+    max-width: 560px;
+    aspect-ratio: 16 / 9;
+}
+
+/* Планшет: 2 колонки — 2 сверху, 1 по центру снизу */
+@media (max-width: 1100px) {
+    #remote-videos-grid[data-count="3"] {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 1fr auto;
+    }
+    #remote-videos-grid[data-count="3"] > :nth-child(1),
+    #remote-videos-grid[data-count="3"] > :nth-child(2) {
+        grid-row: 1;
+    }
+    #remote-videos-grid[data-count="3"] > :nth-child(3) {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        max-width: 50%;
+        width: 100%;
+        margin: 0 auto;
+        justify-self: center;
+    }
+}
+
+/* Мобилка: 1 колонка */
+@media (max-width: 640px) {
+    #remote-videos-grid[data-count="3"] {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+        gap: 8px;
+        padding: 2vh 2vw;
+    }
+    #remote-videos-grid[data-count="3"] > :nth-child(1),
+    #remote-videos-grid[data-count="3"] > :nth-child(2),
+    #remote-videos-grid[data-count="3"] > :nth-child(3) {
+        grid-column: 1;
+        grid-row: auto;
+        max-width: 100%;
+        aspect-ratio: 16 / 9;
     }
 }
 
@@ -1149,16 +1659,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
                 <img src="/logo.png" alt="Vidma" width="72" height="72" style="border-radius:18px;" fetchpriority="high">
                 <span>Vidma</span>
             </div>
-            <div class="privacy-badge">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <span data-i18n="badge.privacy">No registration. Your conversation is private.</span>
-            </div>
-            <div class="privacy-badge" style="background:rgba(245,158,11,0.12);color:#fbbf24;border-color:rgba(245,158,11,0.3);margin-top:8px;">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6M12 18v4M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M18 12h4M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/></svg>
-                <span data-i18n="badge.beta">Beta version. Please leave feedback after the call!</span>
-            </div>
+            
+            
             <h1 style="position:absolute; opacity:0; pointer-events:none;">Бесплатные видеозвонки Vidma</h1>
-            <div class="subtitle" data-i18n="app.subtitle">Video meetings in one click</div>
+            <div class="subtitle" data-i18n="app.subtitle">Бесплатные видеозвонки в браузере</div>
         </header>
         <div class="cards">
             <div class="card">
@@ -1266,15 +1770,11 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
         </section>
 
         <div class="footer-note">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-            <span data-i18n="footer.noHistory">We don't store call history and don't require installation.</span>
-        </div>
-        <div class="support-link">
-            <span data-i18n="support">Support</span>: <span>vidma.on@gmail.com</span>
-        </div>
-        <div class="legal-links">
-            <a href="/privacy" data-i18n="legal.privacy">Privacy</a>
-            <a href="/terms" data-i18n="legal.terms">Terms</a>
+            Vidma &copy; 2026 &middot;
+            <a href="https://github.com/ismatovweb/vidma" target="_blank" rel="noopener">GitHub</a> &middot;
+            <a href="/privacy" data-i18n="legal.privacy">Privacy</a> &middot;
+            <a href="/terms" data-i18n="legal.terms">Terms</a> &middot;
+            <a href="mailto:support@vidma.online">support@vidma.online</a>
         </div>
     </div>
 
@@ -1302,6 +1802,10 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             </div>
             <div class="lobby-level"><div id="lobby-level-bar"></div></div>
 
+            
+
+            
+
             <div class="lobby-row">
                 <label data-i18n="lobby.camera">Camera</label>
                 <select id="lobby-cam-select"></select>
@@ -1314,6 +1818,15 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
             <div class="lobby-actions">
                 <button class="btn-lobby-cancel" onclick="cancelLobby()" data-i18n="lobby.cancel">Cancel</button>
                 <button class="btn-lobby-join" id="lobby-join-btn" onclick="confirmLobbyEntry()"> <span data-i18n="lobby.join">Join room</span></button>
+            </div>
+
+            <div class="lobby-noise-row">
+                <span class="nr-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="10" x2="4" y2="14"/><line x1="8" y1="6" x2="8" y2="18"/><line x1="12" y1="3" x2="12" y2="21"/><line x1="16" y1="8" x2="16" y2="16"/><line x1="20" y1="11" x2="20" y2="13"/></svg>
+                    <span data-i18n="noise.label">Шумоподавление AI</span>
+                    <span class="nr-hint" id="nr-hint"></span>
+                </span>
+                <button class="nr-toggle" id="noise-toggle" onclick="toggleNoiseSuppression()" type="button"></button>
             </div>
         </div>
     </div>

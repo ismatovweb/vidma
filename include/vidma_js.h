@@ -413,10 +413,203 @@ function initTopBarsState() {
     }
     topBar.classList.toggle('collapsed', collapsed);
     btn.classList.toggle('collapsed', collapsed);
+    btn.classList.add('visible');
 }
 
 window.toggleTopBars = toggleTopBars;
 window.initTopBarsState = initTopBarsState;
+
+
+// =====================================================================
+// RNNoise suppression (pure WebAudio, no LiveKit dependency)
+// =====================================================================
+const NR_SUPPORTED = (function() {
+    const ua = navigator.userAgent;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+    const isSafari = /Safari/.test(ua) && !/Chrome|Chromium/.test(ua);
+    return !isMobile && !isSafari && 'AudioWorklet' in window && 'AudioContext' in window;
+})();
+
+const NR_CDN = '/rnnoise';
+let __nrEnabled = false;
+let __nrAudioCtx = null;
+let __nrNode = null;
+let __nrSource = null;
+let __nrDest = null;
+let __nrProcessedTrack = null;
+
+function updateNoiseToggleUI() {
+    const toggle = document.getElementById('noise-toggle');
+    const hint = document.getElementById('nr-hint');
+    if (!toggle) return;
+    if (!NR_SUPPORTED) {
+        toggle.classList.add('disabled');
+        toggle.classList.remove('on');
+        if (hint) hint.textContent = '(' + i18nT('noise.unsupported') + ')';
+        return;
+    }
+    toggle.classList.toggle('on', __nrEnabled);
+    if (hint) hint.textContent = '';
+}
+
+function toggleNoiseSuppression() {
+    if (!NR_SUPPORTED) {
+        showToast(i18nT('noise.unsupported'));
+        return;
+    }
+    __nrEnabled = !__nrEnabled;
+    try { localStorage.setItem('vidma-noise', __nrEnabled ? '1' : '0'); } catch (e) {}
+    updateNoiseToggleUI();
+    updateSensitivityVisibility();
+    console.log('[noise] enabled =', __nrEnabled);
+    showToast(__nrEnabled ? i18nT('noise.on') : i18nT('noise.off'));
+}
+
+function isNoiseEnabled() {
+    if (!NR_SUPPORTED) return false;
+    try {
+        const saved = localStorage.getItem('vidma-noise');
+        if (saved === '1') return true;
+        if (saved === '0') return false;
+    } catch (e) {}
+    return false; // по умолчанию ВЫКЛЮЧЕНО, пользователь включает сам
+}
+
+async function initRNNoiseWorklet() {
+    if (__nrNode) return __nrNode;
+    if (!NR_SUPPORTED) throw new Error('not supported');
+
+    const mod = await import(NR_CDN + '/index.js');
+    const { loadRnnoise, RnnoiseWorkletNode } = mod;
+
+    const wasmBinary = await loadRnnoise({
+        url: NR_CDN + '/rnnoise.wasm',
+        simdUrl: NR_CDN + '/rnnoise_simd.wasm'
+    });
+
+    __nrAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    if (__nrAudioCtx.state === 'suspended') await __nrAudioCtx.resume();
+
+    await __nrAudioCtx.audioWorklet.addModule(NR_CDN + '/rnnoise-worklet.js');
+    __nrNode = new RnnoiseWorkletNode(__nrAudioCtx, { wasmBinary, maxChannels: 1 });
+    console.log('[noise] RNNoise worklet loaded');
+    return __nrNode;
+}
+
+// Возвращает НОВЫЙ аудиотрек с шумоподавлением
+async function applyNoiseSuppression(stream) {
+    if (!stream || !__nrEnabled || !NR_SUPPORTED) return stream;
+    const audioTrack = stream.getAudioTracks()[0];
+    if (!audioTrack) return stream;
+
+    try {
+        const node = await initRNNoiseWorklet();
+
+        __nrSource = __nrAudioCtx.createMediaStreamSource(new MediaStream([audioTrack]));
+        // Mono — RNNoise работает только с 1 каналом
+        try {
+            __nrSource.channelCount = 1;
+            __nrSource.channelCountMode = 'explicit';
+            __nrSource.channelInterpretation = 'speakers';
+        } catch (e) {}
+
+        __nrDest = __nrAudioCtx.createMediaStreamDestination();
+
+        // Пред-гейн на основе чувствительности
+        // Нейтральный граф: RNNoise сам нормализует громкость
+        __nrSource.connect(node);
+        node.connect(__nrDest);
+        console.log('[noise] neutral graph');
+        node.connect(__nrDest);
+
+        // КРИТИЧНО: silent keep-alive — заставляет Chrome обрабатывать граф
+        const silentSink = __nrAudioCtx.createGain();
+        silentSink.gain.value = 0;
+        node.connect(silentSink);
+        silentSink.connect(__nrAudioCtx.destination);
+
+        __nrProcessedTrack = __nrDest.stream.getAudioTracks()[0];
+        __nrProcessedTrack.enabled = audioTrack.enabled;
+
+        // Подменяем аудиотрек в stream
+        stream.removeTrack(audioTrack);
+        stream.addTrack(__nrProcessedTrack);
+
+        console.log('[noise] RNNoise applied, new track:', __nrProcessedTrack.label);
+    } catch (e) {
+        console.warn('[noise] failed to apply RNNoise:', e);
+        showToast(i18nT('noise.failed'));
+    }
+
+    return stream;
+}
+
+
+// =====================================================================
+// Noise sensitivity (1-10)
+// =====================================================================
+let __nrSensitivity = 5;
+let __nrPreGain = null;
+
+function getSensitivity() {
+    try {
+        const v = parseInt(localStorage.getItem('vidma-noise-sens') || '5', 10);
+        if (v >= 1 && v <= 10) return v;
+    } catch (e) {}
+    return 5;
+}
+
+function setSensitivity(v) {
+    v = Math.max(1, Math.min(10, parseInt(v, 10) || 5));
+    __nrSensitivity = v;
+    try { localStorage.setItem('vidma-noise-sens', String(v)); } catch (e) {}
+    const el = document.getElementById('nr-sens-value');
+    if (el) el.textContent = String(v);
+    const slider = document.getElementById('nr-sens-slider');
+    if (slider) {
+        if (parseInt(slider.value, 10) !== v) slider.value = String(v);
+        // Обновляем заливку
+        const pct = ((v - 1) / 9) * 100;
+        slider.style.setProperty('--fill', pct + '%');
+    }
+    // Гейн фиксирован — не обновляем
+}
+
+// sensitivity 1 (только громкий голос) -> 0.8
+// sensitivity 5 (средне) -> 2.0
+// sensitivity 10 (любой голос) -> 4.5
+function sensitivityToGain(s) {
+    return 0.8 + ((s - 1) / 9) * 3.7;
+}
+
+function onSensitivityChange(v) {
+    setSensitivity(v);
+}
+
+function updateSensitivityVisibility() {
+    const row = document.getElementById('nr-sens-row');
+    if (!row) return;
+    row.classList.toggle('visible', __nrEnabled && NR_SUPPORTED);
+}
+
+window.onSensitivityChange = onSensitivityChange;
+window.getSensitivity = getSensitivity;
+
+function initNoiseToggle() {
+    __nrEnabled = isNoiseEnabled();
+    __nrSensitivity = getSensitivity();
+    const el = document.getElementById('nr-sens-value');
+    if (el) el.textContent = String(__nrSensitivity);
+    const slider = document.getElementById('nr-sens-slider');
+    if (slider) slider.value = String(__nrSensitivity);
+    updateNoiseToggleUI();
+    updateSensitivityVisibility();
+    console.log('[noise] init, enabled =', __nrEnabled, 'sens =', __nrSensitivity, 'supported =', NR_SUPPORTED);
+}
+
+window.toggleNoiseSuppression = toggleNoiseSuppression;
+window.initNoiseToggle = initNoiseToggle;
+window.applyNoiseSuppression = applyNoiseSuppression;
 
 function showLobby(roomId, name) {
     currentRoomId = roomId;
@@ -445,7 +638,9 @@ function showLobby(roomId, name) {
 
     document.getElementById('main-screen').style.display = 'none';
     document.getElementById('call-screen').style.display = 'none';
+    { const __b = document.getElementById('toggle-bars-btn'); if (__b) { __b.classList.remove('visible'); __b.style.display = 'none'; } }
     document.getElementById('lobby-screen').classList.add('active');
+    if (typeof initNoiseToggle === 'function') initNoiseToggle();
 
     // Заполняем поле имени в лобби
     const nameInput = document.getElementById('lobby-name-input');
@@ -676,8 +871,10 @@ async function confirmLobbyEntry() {
     }
     document.getElementById('lobby-screen').classList.remove('active');
     document.getElementById('call-screen').style.display = 'block';
+    if (typeof initTopBarsState === 'function') initTopBarsState();
     document.getElementById('current-room-code').textContent = currentRoomId;
     setLocalVideoLabel(currentName + ' (' + i18nT('call.you') + ')');
+    await applyNoiseSuppression(stream);
     await connectToRoom(stream);
 }
 
@@ -963,12 +1160,46 @@ function toggleFullscreen(wrapperOrVideo) {
 
 function tryWebkitFullscreen(video, wrapper) {
     if (video && video.webkitEnterFullscreen) {
-        try { video.webkitEnterFullscreen(); return; }
-        catch (e) { console.warn('webkitEnterFullscreen failed', e); }
+        try {
+            attachFullscreenResume(video);
+            video.webkitEnterFullscreen();
+            return;
+        } catch (e) { console.warn('webkitEnterFullscreen failed', e); }
     }
     if (wrapper && wrapper.webkitRequestFullscreen) {
         wrapper.webkitRequestFullscreen();
     }
+}
+
+
+// =====================================================================
+// Fullscreen fix: восстановление play после exit fullscreen
+// =====================================================================
+function resumeAllVideos() {
+    document.querySelectorAll('video').forEach(v => {
+        if (v.srcObject && v.paused) {
+            v.play().catch(e => console.warn('[fullscreen] resume play failed:', e));
+        }
+    });
+}
+
+document.addEventListener('fullscreenchange', () => {
+    setTimeout(resumeAllVideos, 300);
+});
+document.addEventListener('webkitfullscreenchange', () => {
+    setTimeout(resumeAllVideos, 300);
+});
+
+// iOS Safari native video fullscreen
+function attachFullscreenResume(video) {
+    if (!video) return;
+    video.addEventListener('webkitendfullscreen', () => {
+        setTimeout(() => {
+            if (video.srcObject && video.paused) {
+                video.play().catch(e => console.warn('[ios-fs] resume:', e));
+            }
+        }, 300);
+    });
 }
 
 function exitFullscreen() {
@@ -1107,17 +1338,30 @@ function updateGridLayout() {
     const grid = document.getElementById('remote-videos-grid');
     if (!grid) return;
     const total = remotePanels.size + remoteScreenPanels.size;
-    if (total === 0) return;
+    if (total === 0) {
+        grid.removeAttribute('data-count');
+        grid.style.gridTemplateColumns = '';
+        return;
+    }
 
+    // Для 1-2-3 — специальные раскладки через CSS
+    if (total <= 3) {
+        grid.dataset.count = String(total);
+        grid.style.gridTemplateColumns = '';
+        console.log('[grid] count=' + total + ' (smart layout)');
+        return;
+    }
+
+    // Для 4+ — динамическая сетка
+    grid.removeAttribute('data-count');
     const w = window.innerWidth;
     let cols;
     if (w < 600) {
-        cols = total <= 4 ? 1 : 2;              // mobile: 1 или 2 колонки
+        cols = total <= 4 ? 1 : 2;
     } else if (w < 900) {
-        cols = total === 1 ? 1 : (total <= 4 ? 2 : 3);  // tablet
+        cols = total === 1 ? 1 : (total <= 4 ? 2 : 3);
     } else {
-        if (total === 1) cols = 1;
-        else if (total <= 4) cols = 2;
+        if (total <= 4) cols = 2;
         else if (total <= 6) cols = 3;
         else if (total <= 9) cols = 3;
         else if (total <= 12) cols = 4;
@@ -1125,18 +1369,284 @@ function updateGridLayout() {
         else cols = 5;
     }
     grid.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0, 1fr))';
-    grid.dataset.cols = String(cols);
-    document.querySelectorAll('.screen-tile').forEach(el => {
-        el.style.gridColumn = (w < 600) ? 'span 1' : 'span 2';
-    });
-    console.log('[grid] tiles=' + total + ' cols=' + cols + ' w=' + w);
+    console.log('[grid] count=' + total + ' cols=' + cols);
 }
 
+let __volResizeBound = false;
 let __gridResizeTimer = null;
 window.addEventListener('resize', () => {
     if (__gridResizeTimer) clearTimeout(__gridResizeTimer);
     __gridResizeTimer = setTimeout(updateGridLayout, 150);
 });
+if (!__volResizeBound) {
+    __volResizeBound = true;
+    window.addEventListener('resize', () => {
+        document.querySelectorAll('.tile-volume-popup').forEach(popup => {
+            const v = parseInt(popup.querySelector('input')?.value || '100', 10);
+            updateSliderFill(popup, v);
+        });
+    });
+}
+
+
+// =====================================================================
+// Per-participant volume control
+// =====================================================================
+function getVolumeFor(id) {
+    try {
+        const v = parseInt(localStorage.getItem('vidma-vol-' + id) || '100', 10);
+        if (v >= 0 && v <= 100) return v;
+    } catch (e) {}
+    return 100;
+}
+
+function setVolumeFor(id, pct) {
+    pct = Math.max(0, Math.min(200, parseInt(pct, 10)));
+    if (isNaN(pct)) pct = 100;
+    try { localStorage.setItem('vidma-vol-' + id, String(pct)); } catch (e) {}
+    applyVolume(id, pct);
+
+    const panel = remotePanels.get(id);
+    if (!panel) return;
+    const wrapper = panel.wrapperEl;
+    const popup = wrapper.querySelector('.tile-volume-popup');
+    if (!popup) return;
+    const slider = popup.querySelector('input');
+    const val = popup.querySelector('.tv-val');
+    const btn = wrapper.querySelector('.tile-volume-btn');
+    const icon = popup.querySelector('.tv-icon');
+    if (slider && parseInt(slider.value, 10) !== pct) slider.value = String(pct);
+    if (val) val.textContent = pct + '%';
+    if (btn) btn.classList.toggle('muted', pct === 0);
+    if (icon) updateVolumeIcon(icon, pct);
+    updateSliderFill(popup, pct);
+    popup.querySelectorAll('.tv-presets button').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.v, 10) === pct);
+    });
+}
+
+function updateSliderFill(popup, pct) {
+    const slider = popup.querySelector('input');
+    const fill = popup.querySelector('.tv-slider-fill');
+    if (!slider || !fill) return;
+    const W = slider.offsetWidth;
+    const thumbW = 22;
+    if (W > 0) {
+        // Точная позиция: от центра thumb на 0% до центра thumb на 200%
+        const fillPx = (pct / 200) * (W - thumbW) + thumbW / 2;
+        fill.style.width = Math.round(fillPx) + 'px';
+    } else {
+        fill.style.width = (pct / 2) + '%';
+    }
+}
+
+
+
+// =====================================================================
+// Per-participant volume (Web Audio GainNode, 0-200%)
+// =====================================================================
+let __volCtx = null;
+const __volNodes = new Map(); // identity -> { source, gain, mst }
+
+function getVolCtx() {
+    if (!__volCtx) {
+        __volCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (__volCtx.state === 'suspended') __volCtx.resume().catch(() => {});
+    return __volCtx;
+}
+
+function getVolumeFor(id) {
+    try {
+        const v = parseInt(localStorage.getItem('vidma-vol-' + id) || '100', 10);
+        if (v >= 0 && v <= 200) return v;
+    } catch (e) {}
+    return 100;
+}
+
+function attachVolume(id, mediaStreamTrack) {
+    if (!mediaStreamTrack) return;
+    try {
+        // Если уже есть — не дублируем
+        if (__volNodes.has(id)) return;
+        const ctx = getVolCtx();
+        const stream = new MediaStream([mediaStreamTrack]);
+        const source = ctx.createMediaStreamSource(stream);
+        const gain = ctx.createGain();
+        const pct = getVolumeFor(id);
+        gain.gain.value = pct / 100;
+        source.connect(gain);
+        gain.connect(ctx.destination);
+        __volNodes.set(id, { source, gain, mst: mediaStreamTrack });
+        console.log('[volume] chain for', id.slice(0,6), 'gain =', (pct/100).toFixed(2));
+        const resume = () => { ctx.resume().catch(()=>{}); document.removeEventListener('click', resume); };
+        if (ctx.state === 'suspended') document.addEventListener('click', resume);
+    } catch (e) {
+        console.warn('[volume] WebAudio failed:', e);
+    }
+}
+
+function detachVolume(id) {
+    const n = __volNodes.get(id);
+    if (!n) return;
+    try { n.source.disconnect(); } catch (e) {}
+    try { n.gain.disconnect(); } catch (e) {}
+    __volNodes.delete(id);
+    console.log('[volume] chain removed for', id.slice(0,6));
+}
+
+function applyVolume(id, pct) {
+    pct = Math.max(0, Math.min(200, pct));
+    const gainValue = pct / 100;
+    const n = __volNodes.get(id);
+    if (n) n.gain.gain.value = gainValue;
+    console.log('[volume]', id.slice(0,6), '=', pct + '%', 'gain=' + gainValue.toFixed(2));
+}
+
+function setVolumeFor(id, pct) {
+    pct = Math.max(0, Math.min(200, parseInt(pct, 10)));
+    if (isNaN(pct)) pct = 100;
+    try { localStorage.setItem('vidma-vol-' + id, String(pct)); } catch (e) {}
+    applyVolume(id, pct);
+
+    const panel = remotePanels.get(id);
+    if (!panel) return;
+    const slider = panel.wrapperEl.querySelector('.tv-slider-row input');
+    const val = panel.wrapperEl.querySelector('.tv-val');
+    const btn = panel.wrapperEl.querySelector('.tile-volume-btn');
+    const icon = panel.wrapperEl.querySelector('.tv-icon');
+    if (slider) {
+        slider.value = String(pct);
+        slider.style.setProperty('--vol-fill', (pct / 2) + '%');
+    }
+    if (val) val.textContent = pct + '%';
+    if (btn) btn.classList.toggle('muted', pct === 0);
+    if (icon) updateVolumeIcon(icon, pct);
+    // Обновляем активные пресеты
+    panel.wrapperEl.querySelectorAll('.tv-presets button').forEach(b => {
+        b.classList.toggle('active', parseInt(b.dataset.v, 10) === pct);
+    });
+}
+
+function updateVolumeIcon(el, pct) {
+    let svg;
+    if (pct === 0) {
+        svg = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>';
+    } else if (pct < 50) {
+        svg = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/></svg>';
+    } else if (pct < 150) {
+        svg = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>';
+    } else {
+        svg = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+    }
+    el.innerHTML = svg;
+}
+
+function toggleMuteFor(id) {
+    const current = getVolumeFor(id);
+    if (current === 0) {
+        // Возврат к 100
+        setVolumeFor(id, 100);
+    } else {
+        setVolumeFor(id, 0);
+    }
+}
+
+function toggleVolumePopup(event, id) {
+    event.stopPropagation();
+    const panel = remotePanels.get(id);
+    if (!panel) return;
+    const wrapper = panel.wrapperEl;
+    const isOpen = wrapper.classList.toggle('volume-open');
+    if (isOpen) {
+        // Закрываем все остальные попапы
+        document.querySelectorAll('.remote-video-wrapper.volume-open').forEach(el => {
+            if (el.id !== 'remote-' + id) el.classList.remove('volume-open');
+        });
+    }
+}
+
+function createVolumeControl(wrapper, id) {
+    if (wrapper.querySelector('.tile-volume-btn')) return;
+    const pct = getVolumeFor(id);
+    const name = (wrapper.querySelector('.video-label')?.textContent || 'Гость').slice(0, 24);
+
+    const btn = document.createElement('button');
+    btn.className = 'tile-volume-btn' + (pct === 0 ? ' muted' : '');
+    btn.title = (typeof i18nT === 'function') ? i18nT('volume.label') : 'Громкость';
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>';
+    btn.onclick = (e) => { e.stopPropagation(); toggleVolumePopup(e, id); };
+
+    const popup = document.createElement('div');
+    popup.className = 'tile-volume-popup';
+    popup.innerHTML = `
+        <div class="tv-header">
+            <span class="tv-name">${name}</span>
+            <span class="tv-val">${pct}%</span>
+        </div>
+        <div class="tv-slider-row">
+            <span class="tv-icon" title="Mute">
+                <svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </span>
+            <div class="tv-slider-wrapper">
+                <div class="tv-slider-track"><div class="tv-slider-fill"></div></div>
+                <input type="range" min="0" max="200" step="5" value="${pct}">
+            </div>
+        </div>
+        <div class="tv-presets">
+            <button data-v="0">Mute</button>
+            <button data-v="50">50%</button>
+            <button data-v="100">100%</button>
+            <button data-v="150">150%</button>
+            <button data-v="200">200%</button>
+        </div>
+    `;
+    popup.addEventListener('click', (e) => e.stopPropagation());
+    popup.addEventListener('mousedown', (e) => e.stopPropagation());
+    popup.addEventListener('touchstart', (e) => e.stopPropagation());
+
+    const slider = popup.querySelector('input');
+    slider.addEventListener('input', (e) => {
+        e.stopPropagation();
+        setVolumeFor(id, e.target.value);
+    });
+    slider.addEventListener('change', (e) => {
+        e.stopPropagation();
+        setVolumeFor(id, e.target.value);
+    });
+
+    popup.querySelector('.tv-icon').addEventListener('click', () => toggleMuteFor(id));
+    popup.querySelectorAll('.tv-presets button').forEach(b => {
+        b.addEventListener('click', () => setVolumeFor(id, parseInt(b.dataset.v, 10)));
+    });
+
+    wrapper.appendChild(btn);
+    wrapper.appendChild(popup);
+
+    // Первичная инициализация fill
+    const icon = popup.querySelector('.tv-icon');
+    updateVolumeIcon(icon, pct);
+    popup.querySelectorAll('.tv-presets button').forEach(b => {
+        if (parseInt(b.dataset.v, 10) === pct) b.classList.add('active');
+    });
+    // Задержка — ждём пока popup появится в DOM и получит ширину
+    setTimeout(() => updateSliderFill(popup, pct), 50);
+}
+
+
+
+
+// Закрытие попапа при клике вне
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.tile-volume-popup') && !e.target.closest('.tile-volume-btn')) {
+        document.querySelectorAll('.remote-video-wrapper.volume-open').forEach(el => {
+            el.classList.remove('volume-open');
+        });
+    }
+});
+
+window.setVolumeFor = setVolumeFor;
+window.getVolumeFor = getVolumeFor;
 
 function attachParticipant(participant) {
     const id = participant.identity;
@@ -1172,6 +1682,7 @@ function attachParticipant(participant) {
         wrapper.appendChild(video);
         wrapper.appendChild(lbl);
         wrapper.appendChild(fsBtn);
+        createVolumeControl(wrapper, id);
         attachDoubleTapFullscreen(wrapper);
         document.getElementById('remote-videos-grid').appendChild(wrapper);
 
@@ -1231,7 +1742,8 @@ function attachParticipant(participant) {
     participant.trackPublications.forEach(pub => {
         if (!pub.isSubscribed || !pub.track) return;
         if (pub.kind === 'audio') {
-            pub.track.attach(camPanel.videoEl);
+            // Аудио идёт через Web Audio, НЕ через video элемент
+            try { attachVolume(id, pub.track.mediaStreamTrack); } catch (e) { console.warn(e); }
             return;
         }
         if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare && screenPanel) {
@@ -1255,6 +1767,7 @@ function attachParticipant(participant) {
 }
 
 function detachParticipant(identity) {
+    detachVolume(identity);
     const camPanel = remotePanels.get(identity);
     if (camPanel) {
         stopSpeakerGlow(identity);
@@ -1294,6 +1807,7 @@ function leaveCallUI() {
 
     setSecurityBar(false);
     document.getElementById('call-screen').style.display = 'none';
+    { const __b = document.getElementById('toggle-bars-btn'); if (__b) { __b.classList.remove('visible'); __b.style.display = 'none'; } }
     document.getElementById('main-screen').style.display = 'block';
 }
 
