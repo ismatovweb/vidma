@@ -1053,10 +1053,39 @@ async function connectToRoom(preStream) {
     }
     currentSessionId = data.identity;
 
+    // 1.5. Fetch TURN credentials (REST auth, TTL 5 min)
+    let __iceServers = [
+        { urls: 'stun:vidma.online:3478' }
+    ];
+    try {
+        const tres = await fetch('/api/turn-credentials', { cache: 'no-store' });
+        if (tres.ok) {
+            const tdata = await tres.json();
+            if (tdata.urls && tdata.username && tdata.credential) {
+                __iceServers.push({
+                    urls: tdata.urls,
+                    username: tdata.username,
+                    credential: tdata.credential
+                });
+                console.log('[turn] creds loaded | ttl =', tdata.ttl, '| urls =', tdata.urls);
+            } else {
+                console.warn('[turn] endpoint returned incomplete data', tdata);
+            }
+        } else {
+            console.warn('[turn] endpoint status', tres.status);
+        }
+    } catch (e) {
+        console.warn('[turn] fetch failed:', e && e.message);
+    }
+
     // 2. Create room
     room = new Room({
         adaptiveStream: true,
         dynacast: true,
+        rtcConfig: {
+            iceServers: __iceServers,
+            iceTransportPolicy: 'all'
+        },
         // Zero jitter buffer - для минимальной задержки и синхронизации A/V
         videoJitterBuffer: { enabled: false },
         videoCaptureDefaults: {
