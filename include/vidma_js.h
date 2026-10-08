@@ -501,11 +501,33 @@ window.initTopBarsState = initTopBarsState;
 // =====================================================================
 // RNNoise suppression (pure WebAudio, no LiveKit dependency)
 // =====================================================================
+function __isAppleMobile() {
+    try {
+        var ua = navigator.userAgent || '';
+        if (/iPhone|iPad|iPod/i.test(ua)) return true;
+        // iPadOS 13+ desktop-mode: reports as Mac, but has multi-touch
+        if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+        return false;
+    } catch (e) { return false; }
+}
+
 const NR_SUPPORTED = (function() {
-    const ua = navigator.userAgent;
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
-    const isSafari = /Safari/.test(ua) && !/Chrome|Chromium/.test(ua);
-    return !isMobile && !isSafari && 'AudioWorklet' in window && 'AudioContext' in window;
+    try {
+        if (__isAppleMobile()) return false;
+        var ua = navigator.userAgent || '';
+        if (/Android/i.test(ua)) return false;
+        var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPR/.test(ua);
+        if (isSafari) return false;
+        return 'AudioWorklet' in window && 'AudioContext' in window;
+    } catch (e) { return false; }
+})();
+
+(function() {
+    try {
+        console.log('[noise] ua =', navigator.userAgent);
+        console.log('[noise] platform =', navigator.platform, '| maxTouchPoints =', navigator.maxTouchPoints);
+        console.log('[noise] __isAppleMobile =', __isAppleMobile(), '| NR_SUPPORTED =', NR_SUPPORTED);
+    } catch (e) {}
 })();
 
 const NR_CDN = '/rnnoise';
@@ -565,8 +587,11 @@ async function initRNNoiseWorklet() {
         simdUrl: NR_CDN + '/rnnoise_simd.wasm'
     });
 
-    __nrAudioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
-    if (__nrAudioCtx.state === 'suspended') await __nrAudioCtx.resume();
+    __nrAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (__nrAudioCtx.state === 'suspended') {
+        try { await __nrAudioCtx.resume(); } catch (e) { console.warn('[noise] resume failed', e); }
+    }
+    console.log('[noise] AudioContext rate =', __nrAudioCtx.sampleRate, '| state =', __nrAudioCtx.state);
 
     await __nrAudioCtx.audioWorklet.addModule(NR_CDN + '/rnnoise-worklet.js');
     __nrNode = new RnnoiseWorkletNode(__nrAudioCtx, { wasmBinary, maxChannels: 1 });
@@ -593,18 +618,13 @@ async function applyNoiseSuppression(stream) {
 
         __nrDest = __nrAudioCtx.createMediaStreamDestination();
 
-        // Пред-гейн на основе чувствительности
         // Нейтральный граф: RNNoise сам нормализует громкость
         __nrSource.connect(node);
         node.connect(__nrDest);
         console.log('[noise] neutral graph');
-        node.connect(__nrDest);
-
-        // КРИТИЧНО: silent keep-alive — заставляет Chrome обрабатывать граф
-        const silentSink = __nrAudioCtx.createGain();
-        silentSink.gain.value = 0;
-        node.connect(silentSink);
-        silentSink.connect(__nrAudioCtx.destination);
+        // silentSink удалён: на iOS переключает audio session в playback
+        // и глушит microphone. На Chrome/Android worklet работает и без него,
+        // поскольку MediaStreamDestination уже в графе.
 
         __nrProcessedTrack = __nrDest.stream.getAudioTracks()[0];
         __nrProcessedTrack.enabled = audioTrack.enabled;
@@ -615,7 +635,18 @@ async function applyNoiseSuppression(stream) {
 
         console.log('[noise] RNNoise applied, new track:', __nrProcessedTrack.label);
     } catch (e) {
-        console.warn('[noise] failed to apply RNNoise:', e);
+        console.warn('[noise] failed to apply RNNoise:', e && e.name, e && e.message);
+        // На всякий случай — восстановить оригинальный трек
+        try {
+            if (__nrProcessedTrack && stream.getAudioTracks().indexOf(__nrProcessedTrack) >= 0) {
+                stream.removeTrack(__nrProcessedTrack);
+            }
+            if (audioTrack && stream.getAudioTracks().indexOf(audioTrack) < 0) {
+                stream.addTrack(audioTrack);
+            }
+        } catch (restoreErr) {
+            console.warn('[noise] restore failed:', restoreErr);
+        }
         showToast(i18nT('noise.failed'));
     }
 
@@ -1697,9 +1728,34 @@ function getVolumeFor(id) {
 async function attachVolume(id, pub) {
     if (!pub || !pub.track) return;
     try {
-        if (__volNodes.has(id)) return;
+        const mst = pub.track.mediaStreamTrack;
+
+        // --- Self-healing: stale entry после reconnect ---
+        const existing = __volNodes.get(id);
+        if (existing) {
+            if (existing.mst === mst && existing.source) {
+                // тот же track — уже подключено
+                return;
+            }
+            console.log('[volume] stale entry for', id.slice(0,6), '— reattaching');
+            try { existing.source && existing.source.disconnect(); } catch(_){}
+            try { existing.gain && existing.gain.disconnect(); } catch(_){}
+            try {
+                if (existing.audioEl) {
+                    existing.audioEl.pause();
+                    existing.audioEl.srcObject = null;
+                    existing.audioEl.remove();
+                }
+            } catch(_){}
+            __volNodes.delete(id);
+        }
+
+        // Резервируем слот ДО await'ов — защита от гонки
+        __volNodes.set(id, { source: null, gain: null, mst: mst, pub: pub, audioEl: null });
+
         const ctx = getVolCtx();
         if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+
         const audioEl = pub.track.attach();
         audioEl.muted = true;
         audioEl.setAttribute('playsinline', '');
@@ -1707,7 +1763,7 @@ async function attachVolume(id, pub) {
         if (!audioEl.parentNode) document.body.appendChild(audioEl);
         try { await audioEl.play(); } catch (e) {}
         console.log('[volume] native attach for', id.slice(0,6), '| srcObject =', !!audioEl.srcObject);
-        const mst = pub.track.mediaStreamTrack;
+
         if (mst && (mst.readyState !== 'live' || mst.muted)) {
             await new Promise((resolve) => {
                 const done = () => { cleanup(); resolve(); };
@@ -1720,6 +1776,7 @@ async function attachVolume(id, pub) {
                 setTimeout(() => { cleanup(); resolve(); }, 3000);
             });
         }
+
         const stream = (audioEl.srcObject instanceof MediaStream) ? audioEl.srcObject : new MediaStream([mst]);
         const source = ctx.createMediaStreamSource(stream);
         const gain = ctx.createGain();
@@ -1727,10 +1784,23 @@ async function attachVolume(id, pub) {
         gain.gain.value = pct / 100;
         source.connect(gain);
         gain.connect(ctx.destination);
-        __volNodes.set(id, { source, gain, mst: mst, pub: pub, audioEl: audioEl });
-        console.log('[volume] chain OK for', id.slice(0,6), '| gain =', (pct/100).toFixed(2), '| ctx.state =', ctx.state, '| readyState =', mst && mst.readyState, '| muted =', mst && mst.muted, '| nativeAttach = true');
+
+        const slot = __volNodes.get(id);
+        if (slot) {
+            slot.source = source;
+            slot.gain = gain;
+            slot.mst = mst;
+            slot.audioEl = audioEl;
+        }
+        console.log('[volume] chain OK for', id.slice(0,6),
+            '| gain =', (pct/100).toFixed(2),
+            '| ctx.state =', ctx.state,
+            '| readyState =', mst && mst.readyState,
+            '| muted =', mst && mst.muted,
+            '| trackId =', mst && mst.id);
     } catch (e) {
-        console.warn('[volume] chain FAILED for', id.slice(0,6), ':', e);
+        console.warn('[volume] chain FAILED for', id.slice(0,6), ':', e && e.name, e && e.message);
+        try { __volNodes.delete(id); } catch (_) {}
     }
 }
 
