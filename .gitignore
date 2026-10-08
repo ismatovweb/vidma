@@ -38,3 +38,6 @@ vidma_events.log
 *.offset
 vidma-events.log
 vidma-monitor.log
+*.tar.gz
+*.tar
+vidma-source-*.tar.gz

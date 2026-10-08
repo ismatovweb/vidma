@@ -44,11 +44,12 @@ private:
     std::string turnHost_;
     int turnPort_;
     int turnTlsPort_;
+    int64_t startTime_;
 
     std::unordered_map<std::string, httplib::ws::WebSocket*> sessions_;
     std::shared_mutex sessionsMutex_;
 
-    std::mutex logMutex_;
+    mutable std::mutex logMutex_;
 
     // ---- base64 (no external deps beyond OpenSSL for HMAC) ----
     static std::string base64Encode(const unsigned char* data, size_t len) {
@@ -131,6 +132,88 @@ private:
              digest, &digestLen);
 
         return signingInput + "." + base64UrlEncode(digest, digestLen);
+    }
+
+    // ==================== WEBHOOK SIGNATURE VERIFICATION ====================
+
+    static std::string base64UrlDecode(const std::string& in) {
+        std::string s = in;
+        for (char& c : s) { if (c == '-') c = '+'; else if (c == '_') c = '/'; }
+        while (s.size() % 4) s.push_back('=');
+        std::string out;
+        out.resize((s.size() / 4) * 3);
+        int n = EVP_DecodeBlock((unsigned char*)out.data(),
+                                (const unsigned char*)s.data(),
+                                (int)s.size());
+        if (n < 0) return "";
+        size_t pad = 0;
+        if (!s.empty() && s[s.size() - 1] == '=') pad++;
+        if (s.size() > 1 && s[s.size() - 2] == '=') pad++;
+        out.resize((size_t)n - pad);
+        return out;
+    }
+
+    static std::string sha256Base64(const std::string& data) {
+        unsigned char digest[EVP_MAX_MD_SIZE];
+        unsigned int len = 0;
+        EVP_Digest(data.data(), data.size(), digest, &len, EVP_sha256(), nullptr);
+        return base64Encode(digest, len);
+    }
+
+    static bool constantTimeEq(const std::string& a, const std::string& b) {
+        if (a.size() != b.size()) return false;
+        unsigned char diff = 0;
+        for (size_t i = 0; i < a.size(); ++i) diff |= (unsigned char)(a[i] ^ b[i]);
+        return diff == 0;
+    }
+
+    bool verifyLiveKitWebhook(const std::string& authHeader, const std::string& body) const {
+        if (livekitApiSecret_.empty() || livekitApiKey_.empty()) return false;
+        const std::string prefix = "Bearer ";
+        if (authHeader.size() <= prefix.size()) return false;
+        std::string token;
+        if (authHeader.size() > prefix.size() && authHeader.compare(0, prefix.size(), prefix) == 0) {
+            token = authHeader.substr(prefix.size());
+        } else {
+            token = authHeader;
+        }
+        while (!token.empty() && (token.back() == ' ' || token.back() == '\t')) token.pop_back();
+        auto d1 = token.find('.');
+        if (d1 == std::string::npos) return false;
+        auto d2 = token.find('.', d1 + 1);
+        if (d2 == std::string::npos) return false;
+        std::string header_b64  = token.substr(0, d1);
+        std::string payload_b64 = token.substr(d1 + 1, d2 - d1 - 1);
+        std::string sig_b64     = token.substr(d2 + 1);
+
+        std::string signingInput = header_b64 + "." + payload_b64;
+        unsigned char digest[EVP_MAX_MD_SIZE];
+        unsigned int digestLen = 0;
+        HMAC(EVP_sha256(),
+             livekitApiSecret_.data(), (int)livekitApiSecret_.size(),
+             (const unsigned char*)signingInput.data(), signingInput.size(),
+             digest, &digestLen);
+        std::string expected_sig_b64 = base64UrlEncode(digest, digestLen);
+        if (!constantTimeEq(sig_b64, expected_sig_b64)) return false;
+
+        std::string payloadJson = base64UrlDecode(payload_b64);
+        if (payloadJson.empty()) return false;
+        try {
+            auto j = json::parse(payloadJson);
+            std::string iss = j.value("iss", std::string());
+            if (iss != livekitApiKey_) {
+                logEvent(std::string("webhook_reject iss_mismatch in=") + iss + " expected=" + livekitApiKey_);
+                return false;
+            }
+            std::string sha_in_token = j.value("sha256", std::string());
+            if (!sha_in_token.empty()) {
+                std::string body_hash = sha256Base64(body);
+                if (!constantTimeEq(sha_in_token, body_hash)) return false;
+            }
+            int64_t exp = j.value("exp", (int64_t)0);
+            if (exp > 0 && (int64_t)std::time(nullptr) > exp) return false;
+        } catch (...) { return false; }
+        return true;
     }
 
     static std::string generateSecureSessionId() {
@@ -230,7 +313,7 @@ private:
         return std::string(buf);
     }
 
-    void logEvent(const std::string& event) {
+    void logEvent(const std::string& event) const {
         std::lock_guard<std::mutex> lock(logMutex_);
         std::ofstream logFile("vidma_events.log", std::ios::app);
         if (logFile.is_open()) {
@@ -305,10 +388,26 @@ private:
         });
 
         httpServer_.Get("/app.js", [](const httplib::Request&, httplib::Response& res) {
+            res.set_header("Cache-Control", "public, max-age=300");
             res.set_content(VIDMA_JS, "application/javascript; charset=utf-8");
         });
 
         httpServer_.Post("/api/livekit-webhook", [this](const httplib::Request& req, httplib::Response& res) {
+            {
+                auto authIt = req.headers.find("Authorization");
+                if (authIt == req.headers.end()) {
+                    logEvent("webhook_reject no_auth");
+                    res.status = 401;
+                    res.set_content(R"({"ok":false,"error":"no_auth"})", "application/json");
+                    return;
+                }
+                if (!verifyLiveKitWebhook(authIt->second, req.body)) {
+                    logEvent("webhook_reject bad_signature");
+                    res.status = 401;
+                    res.set_content(R"({"ok":false,"error":"bad_signature"})", "application/json");
+                    return;
+                }
+            }
             try {
                 auto j = json::parse(req.body);
                 std::string event = j.value("event", std::string());
@@ -358,6 +457,17 @@ private:
             json j;
             j["status"] = "ok";
             j["time"]   = (int64_t)std::time(nullptr);
+            res.set_content(j.dump(), "application/json");
+        });
+
+        httpServer_.Get("/api/stats", [this](const httplib::Request&, httplib::Response& res) {
+            json j;
+            j["status"]       = "ok";
+            j["time"]         = (int64_t)std::time(nullptr);
+            j["uptime"]       = (int64_t)(std::time(nullptr) - startTime_);
+            j["rooms"]        = (int64_t)roomManager_.getRoomCount();
+            j["participants"] = (int64_t)roomManager_.getTotalParticipantCount();
+            res.set_header("Cache-Control", "no-store");
             res.set_content(j.dump(), "application/json");
         });
 
@@ -655,7 +765,7 @@ private:
     }
 
 public:
-    explicit VideoCallServer(unsigned short port = 8080) : port_(port) {
+    explicit VideoCallServer(unsigned short port = 8080) : port_(port), startTime_((int64_t)std::time(nullptr)) {
         const char* secret = std::getenv("TURN_SECRET");
         if (const char* v = std::getenv("LIVEKIT_URL"))         livekitUrl_ = v;
         if (const char* v = std::getenv("LIVEKIT_API_KEY"))     livekitApiKey_ = v;

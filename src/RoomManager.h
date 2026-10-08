@@ -135,6 +135,18 @@ public:
         return (it == rooms_.end()) ? 0 : it->second.participants.size();
     }
 
+    size_t getRoomCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return rooms_.size();
+    }
+
+    size_t getTotalParticipantCount() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        size_t total = 0;
+        for (const auto& kv : rooms_) total += kv.second.participants.size();
+        return total;
+    }
+
     std::vector<std::pair<std::string, std::string>>
     getAllParticipants(const std::string& roomId) {
         std::lock_guard<std::mutex> lock(mutex_);
