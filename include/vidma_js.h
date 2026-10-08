@@ -2651,6 +2651,13 @@ async function __verifyAlive(kind, waitMs) {
 }
 
 async function __recoverOne(kind) {
+
+    // Guard: не восстанавливать после disconnect
+    if (!room || !room.localParticipant) {
+        console.log('[devices] recovery skipped — room is null/closed');
+        return;
+    }
+
     var isMic = (kind === 'mic');
     var attempts = isMic ? __micAttempts : __camAttempts;
     if (attempts >= 3) {
@@ -2701,20 +2708,54 @@ async function __recoverOne(kind) {
     }
 }
 
+// Anti-false-positive state (device recovery)
+var __micEverPublished = false;
+var __camEverPublished = false;
+var __lastRoomState = 'disconnected';
+var __lastConnectAt = 0;
+
 async function __checkDevicePresence() {
     if (__recovering) return;
     if (!room || !room.localParticipant) return;
+
+    // Сброс флагов при disconnected -> connected
+    if (room.state !== __lastRoomState) {
+        console.log('[devices] room state', __lastRoomState, '->', room.state);
+        if (room.state === 'connected' && __lastRoomState !== 'connected') {
+            __micEverPublished = false;
+            __camEverPublished = false;
+            __lastConnectAt = Date.now();
+        }
+        __lastRoomState = room.state;
+    }
+    if (room.state !== 'connected') return;
+
+    // Grace period — 8 секунд после connect (публикации могут ещё не быть готовы)
+    if (__lastConnectAt && (Date.now() - __lastConnectAt) < 8000) {
+        console.log('[devices] check skipped — grace ' +
+                    Math.round((Date.now() - __lastConnectAt) / 1000) + 's / 8s');
+        return;
+    }
+
     try {
         var micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
         var camPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
         var micMst = micPub && micPub.track && micPub.track.mediaStreamTrack;
         var camMst = camPub && camPub.track && camPub.track.mediaStreamTrack;
 
-        var micLost = __desiredMic && (!micMst || micMst.readyState === 'ended' || micMst.muted === true);
-        var camLost = __desiredCam && (!camMst || camMst.readyState === 'ended' || camMst.muted === true);
+        var micLive = !!(micMst && micMst.readyState === 'live' && !micMst.muted);
+        var camLive = !!(camMst && camMst.readyState === 'live' && !camMst.muted);
+        if (micLive) __micEverPublished = true;
+        if (camLive) __camEverPublished = true;
+
+        // LOST только если публикация БЫЛА живой, а теперь мертва.
+        // Отсутствие публикации сразу после connect — не LOST.
+        var micLost = __desiredMic && __micEverPublished && !micLive;
+        var camLost = __desiredCam && __camEverPublished && !camLive;
 
         console.log('[devices] check | mic ' + (micMst && micMst.readyState) + '/' + (micMst && micMst.muted) +
                     ' || cam ' + (camMst && camMst.readyState) + '/' + (camMst && camMst.muted) +
+                    ' || ever ' + __micEverPublished + '/' + __camEverPublished +
                     ' || LOST ' + micLost + '/' + camLost);
 
         if (micLost && !__recovering) {
