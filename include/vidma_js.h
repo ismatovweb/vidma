@@ -25,6 +25,17 @@ const { Room, RoomEvent, Track, ConnectionState, DisconnectReason } = LivekitCli
 let room = null;
 let currentRoomId = null;
 let currentName = null;
+
+// Разовая очистка устаревшего guest-имени из localStorage
+(function __cleanupStaleGuestName() {
+    try {
+        var saved = (localStorage.getItem('vidma-name') || '').trim();
+        if (saved && isGuestName(saved)) {
+            console.log('[i18n] cleaning stale guest name:', saved);
+            localStorage.removeItem('vidma-name');
+        }
+    } catch (e) {}
+})();
 let currentSessionId = null;   // server-issued identity
 let selectedRating = 0;
 
@@ -1508,8 +1519,13 @@ function isGuestName(name) {
     const t = String(name).trim();
     if (t === '') return true;
     const low = t.toLowerCase();
-    if (low === 'гость' || low === 'guest' || low === 'гость ') return true;
-    // Если первый символ не буква (цифра, знак) — тоже гость
+    // Гостевые имена во всех 8 поддерживаемых языках + англ.
+    const guestWords = [
+        'гость', 'guest',
+        'invitado', 'gast', 'invité', 'invite',
+        '客人', 'ゲスト', 'convidado'
+    ];
+    if (guestWords.indexOf(low) !== -1) return true;
     const first = t.charAt(0);
     if (!/[\p{L}]/u.test(first)) return true;
     return false;
@@ -1762,8 +1778,16 @@ async function attachVolume(id, pub) {
         // --- Self-healing: stale entry после reconnect ---
         const existing = __volNodes.get(id);
         if (existing) {
-            if (existing.mst === mst && existing.source) {
-                // тот же track — уже подключено
+            // тот же track и уже готов — выходим
+            if (existing.mst === mst && existing.source && !existing._attaching) {
+                return;
+            }
+            // тот же track, attach сейчас в процессе — не дублируем
+            if (existing.mst === mst && existing._attaching) {
+                return;
+            }
+            // attach в процессе для другого трека — не мешаем
+            if (existing._attaching) {
                 return;
             }
             console.log('[volume] stale entry for', id.slice(0,6), '— reattaching');
@@ -1780,7 +1804,7 @@ async function attachVolume(id, pub) {
         }
 
         // Резервируем слот ДО await'ов — защита от гонки
-        __volNodes.set(id, { source: null, gain: null, mst: mst, pub: pub, audioEl: null });
+        __volNodes.set(id, { source: null, gain: null, mst: mst, pub: pub, audioEl: null, _attaching: true });
 
         const ctx = getVolCtx();
         if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
@@ -1820,6 +1844,7 @@ async function attachVolume(id, pub) {
             slot.gain = gain;
             slot.mst = mst;
             slot.audioEl = audioEl;
+            slot._attaching = false;
         }
         console.log('[volume] chain OK for', id.slice(0,6),
             '| gain =', (pct/100).toFixed(2),
