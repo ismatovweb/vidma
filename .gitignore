@@ -41,3 +41,8 @@ vidma-monitor.log
 *.tar.gz
 *.tar
 vidma-source-*.tar.gz
+
+# Audit artifacts
+02-services.txt
+10-cron.txt
+*.pre-*.bak
