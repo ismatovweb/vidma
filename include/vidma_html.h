@@ -2455,6 +2455,152 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     .chat-reaction { font-size: 20px; }
     .emoji-bubble { font-size: 42px; }
 }
+
+/* ============================================================
+   === Landscape phone UX (iPhone + Android) — full rework ===
+   ============================================================
+   Проблема: top-bar (~110px) + controls (60px) перекрывали видео
+   в горизонтальной ориентации. Здесь всё компактно и с учётом
+   safe-area-inset-left/right (чёлка iPhone сбоку).
+   ============================================================ */
+
+@media (orientation: landscape) and (max-height: 500px) {
+
+    /* --- Top-bar: одна строка, минимум --- */
+    .top-bar {
+        padding: 4px 8px !important;
+        padding-left: calc(8px + env(safe-area-inset-left, 0px)) !important;
+        padding-right: calc(8px + env(safe-area-inset-right, 0px)) !important;
+    }
+    .top-status-row {
+        margin-bottom: 4px !important;
+        gap: 4px !important;
+    }
+    /* Beta + Connection — уменьшаем, но не скрываем */
+    .top-status-row .security-bar {
+        font-size: 0.62rem !important;
+        padding: 3px 8px !important;
+    }
+    /* Room-info-bar — компактный, одной строкой */
+    .room-info-bar {
+        padding: 4px 12px !important;
+        gap: 8px !important;
+        font-size: 0.75rem !important;
+    }
+    .room-info-bar .room-code {
+        font-size: 0.75rem !important;
+        padding: 2px 8px !important;
+        letter-spacing: 1px !important;
+    }
+    .room-info-bar .share-btn {
+        padding: 4px 10px !important;
+        font-size: 0.7rem !important;
+        gap: 2px !important;
+    }
+    .room-info-bar .share-btn svg {
+        width: 11px !important;
+        height: 11px !important;
+    }
+
+    /* --- Videos container — использовать больше высоты --- */
+    #videos-container {
+        top: 62px !important;
+        bottom: 62px !important;
+        padding: 2px 6px !important;
+        padding-left: calc(6px + env(safe-area-inset-left, 0px)) !important;
+        padding-right: calc(6px + env(safe-area-inset-right, 0px)) !important;
+    }
+
+    /* --- Controls — компактнее, поверх видео --- */
+    .controls {
+        height: 46px !important;
+        padding: 0 10px !important;
+        gap: 6px !important;
+        bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+        border-radius: 24px !important;
+    }
+    .control-btn {
+        width: 36px !important;
+        height: 36px !important;
+        border-radius: 18px !important;
+    }
+    .control-btn svg {
+        width: 16px !important;
+        height: 16px !important;
+    }
+
+    /* --- Local video (PiP) — уменьшить --- */
+    #local-video-container {
+        width: 100px !important;
+        bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+        right: calc(8px + env(safe-area-inset-right, 0px)) !important;
+        border-radius: 12px !important;
+    }
+    #local-video-container .video-label {
+        font-size: 0.6rem !important;
+        padding: 2px 8px !important;
+        bottom: 4px !important;
+        left: 6px !important;
+    }
+    #local-video-container .video-avatar .avatar-circle {
+        width: 44px !important;
+        height: 44px !important;
+        font-size: 1.4rem !important;
+    }
+    #local-video-container .video-avatar .avatar-circle svg {
+        width: 22px !important;
+        height: 22px !important;
+    }
+
+    /* --- Chat panel — во всю высоту --- */
+    #chat-panel {
+        width: 320px !important;
+        padding-top: env(safe-area-inset-top, 0px) !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    }
+    #chat-header {
+        padding: 10px 14px !important;
+    }
+    #chat-messages {
+        padding: 8px !important;
+    }
+    #chat-reactions-bar {
+        padding: 6px 8px !important;
+    }
+    .chat-reaction {
+        font-size: 18px !important;
+    }
+
+    /* --- Participants panel — компактнее --- */
+    #participants-panel {
+        max-height: 85vh !important;
+    }
+
+    /* --- Убираем лишнее на очень маленькой высоте --- */
+    @media (max-height: 380px) {
+        /* Скрываем Beta badge в landscape iPhone */
+        #beta-indicator {
+            display: none !important;
+        }
+        /* Скрываем подпись "Быстрые реакции" в landscape на очень низком экране */
+        .chat-reactions-label {
+            display: none !important;
+        }
+    }
+}
+
+/* ============================================================
+   === Боковые safe-area на iPhone landscape (чёлка слева) ===
+   ============================================================ */
+@supports (padding-left: env(safe-area-inset-left)) {
+    @media (orientation: landscape) {
+        body {
+            padding-left: env(safe-area-inset-left, 0px);
+            padding-right: env(safe-area-inset-right, 0px);
+        }
+    }
+}
+
 </style>
     <script type="application/ld+json">
     {
