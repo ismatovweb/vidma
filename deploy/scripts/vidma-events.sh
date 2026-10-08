@@ -53,21 +53,45 @@ if [ -f "$EVENTS_LOG" ]; then
         NEW=$(tail -n +$((OFFSET + 1)) "$EVENTS_LOG")
         while IFS= read -r line; do
             [ -z "$line" ] && continue
+
+            # Skip token_req (too noisy — duplicate of room_create)
+            if echo "$line" | grep -q 'token_req'; then
+                continue
+            fi
+
             if echo "$line" | grep -q 'room_create id='; then
                 RID=$(echo "$line" | sed -n 's/.*room_create id=\([^ ]*\).*/\1/p')
-                [ -n "$RID" ] && MESSAGES="${MESSAGES}🎥 Новая комната: <b>${RID}</b>%0A" && COUNT=$((COUNT+1))
+                [ -n "$RID" ] && MESSAGES="${MESSAGES}🎥 <b>Новая комната</b> ${RID}%0A" && COUNT=$((COUNT+1))
+
+            elif echo "$line" | grep -q 'room_closed id='; then
+                RID=$(echo "$line" | sed -n 's/.*room_closed id=\([^ ]*\).*/\1/p')
+                LAST=$(echo "$line" | sed -n 's/.*last_user=\([^ ]*\).*/\1/p')
+                LAST=${LAST//_/ }
+                [ -z "$LAST" ] && LAST="Гость"
+                MESSAGES="${MESSAGES}🏁 <b>Комната закрыта</b> ${RID} (последний: ${LAST})%0A" && COUNT=$((COUNT+1))
+
             elif echo "$line" | grep -q ' join room='; then
                 RID=$(echo "$line" | sed -n 's/.*join room=\([^ ]*\).*/\1/p')
                 NAME=$(echo "$line" | sed -n 's/.*name=\([^ ]*\).*/\1/p')
+                CNT=$(echo "$line" | sed -n 's/.*count=\([0-9]*\).*/\1/p')
                 NAME=${NAME//_/ }
                 [ -z "$NAME" ] && NAME="Гость"
-                MESSAGES="${MESSAGES}👤 <b>${NAME}</b> вошёл в ${RID}%0A" && COUNT=$((COUNT+1))
+                [ -z "$CNT" ] && CNT="?"
+                MESSAGES="${MESSAGES}👤 <b>${NAME}</b> вошёл в ${RID} (сейчас: ${CNT})%0A" && COUNT=$((COUNT+1))
+
             elif echo "$line" | grep -q ' leave room='; then
                 RID=$(echo "$line" | sed -n 's/.*leave room=\([^ ]*\).*/\1/p')
                 NAME=$(echo "$line" | sed -n 's/.*name=\([^ ]*\).*/\1/p')
+                REM=$(echo "$line" | sed -n 's/.*remaining=\([0-9]*\).*/\1/p')
                 NAME=${NAME//_/ }
                 [ -z "$NAME" ] && NAME="Гость"
-                MESSAGES="${MESSAGES}🚪 <b>${NAME}</b> покинул ${RID}%0A" && COUNT=$((COUNT+1))
+                if [ "$REM" = "0" ]; then
+                    # Don't show "покинул" — will show "комната закрыта" на след. строке
+                    :
+                else
+                    [ -z "$REM" ] && REM="?"
+                    MESSAGES="${MESSAGES}🚪 <b>${NAME}</b> покинул ${RID} (осталось: ${REM})%0A" && COUNT=$((COUNT+1))
+                fi
             fi
         done <<< "$NEW"
         save_offset "events" "$TOTAL"
@@ -99,12 +123,19 @@ except: pass
             RATING=$(echo "$PARSED" | cut -d'|' -f1)
             COMMENT=$(echo "$PARSED" | cut -d'|' -f2)
             ROOM=$(echo "$PARSED" | cut -d'|' -f3)
-            STARS=""
-            i=1
-            while [ $i -le $RATING ]; do STARS="${STARS}★"; i=$((i+1)); done
-            [ -z "$STARS" ] && STARS="$RATING"
-            MSG="⭐ Оценка ${STARS} (${RATING}/5) · ${ROOM}%0A"
-            [ -n "$COMMENT" ] && MSG="${MSG}💬 <i>${COMMENT}</i>%0A"
+            # Пропускаем пустые отзывы (rating=0 и без коммента)
+            if [ "$RATING" = "0" ] && [ -z "$COMMENT" ]; then
+                continue
+            fi
+            if [ "$RATING" != "0" ]; then
+                STARS=""
+                i=1
+                while [ $i -le $RATING ]; do STARS="${STARS}★"; i=$((i+1)); done
+                MSG="⭐ Оценка ${STARS} (${RATING}/5) · ${ROOM}%0A"
+            else
+                MSG="💬 Отзыв · ${ROOM}%0A"
+            fi
+            [ -n "$COMMENT" ] && MSG="${MSG}<i>${COMMENT}</i>%0A"
             MESSAGES="${MESSAGES}${MSG}"
             COUNT=$((COUNT+1))
         done <<< "$NEW"
