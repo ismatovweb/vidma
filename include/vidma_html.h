@@ -2468,6 +2468,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     }
     </script>
     <link rel="preload" as="image" href="/logo.png">
+    <script defer data-domain="vidma.online" src="https://status.vidma.online/js/script.js"></script>
 </head>
 <body>
 <div id="invite-modal">

@@ -8,6 +8,18 @@ constexpr const char* VIDMA_JS = R"js(
 // =====================================================================
 'use strict';
 
+// ============ Plausible Analytics helper ============
+function plausibleTrack(name, props) {
+    try {
+        if (typeof window.plausible === 'function') {
+            window.plausible(name, props ? { props: props } : undefined);
+            console.log('[plausible]', name, props || '');
+        }
+    } catch (e) {}
+}
+window.plausibleTrack = plausibleTrack;
+
+
 const { Room, RoomEvent, Track, ConnectionState, DisconnectReason } = LivekitClient;
 
 let room = null;
@@ -72,6 +84,7 @@ async function createRoom() {
         currentName = name;
         document.getElementById('created-room-id').textContent = data.roomId;
         document.getElementById('room-created').style.display = 'block';
+        if (typeof plausibleTrack === 'function') plausibleTrack('room_created');
     } catch (e) {
         showToast(i18nT('error.connection'));
         console.error(e);
@@ -83,7 +96,7 @@ function copyRoomLink() {
     const link = location.origin + '/?room=' + currentRoomId;
     const text = i18nT('link.share') + '\n' + link;
     navigator.clipboard.writeText(text)
-        .then(() => showCopyToast())
+        .then(() => { showCopyToast(); if (typeof plausibleTrack === 'function') plausibleTrack('link_copied'); })
         .catch(e => console.warn('[clipboard] copy failed:', e));
 }
 
@@ -112,6 +125,7 @@ async function joinRoom() {
 async function joinRoomById(roomId, name) {
     currentRoomId = roomId;
     currentName = name;
+    if (typeof plausibleTrack === 'function') plausibleTrack('room_joined');
     await showLobby(roomId, name);
 }
 
@@ -381,6 +395,7 @@ window.acceptCookies = acceptCookies;
 // Invite modal
 // =====================================================================
 function openInviteModal() {
+    if (typeof plausibleTrack === 'function') plausibleTrack('invite_clicked');
     const roomId = currentRoomId || '';
     const link = roomId
         ? 'https://vidma.online/?room=' + roomId
@@ -408,7 +423,7 @@ function getInviteText() {
 
 function inviteCopy() {
     navigator.clipboard.writeText(getInviteText())
-        .then(() => showCopyToast())
+        .then(() => { showCopyToast(); if (typeof plausibleTrack === 'function') plausibleTrack('link_copied'); })
         .catch(e => console.warn('[clipboard] invite copy failed:', e));
 }
 
@@ -970,6 +985,7 @@ async function confirmLobbyEntry() {
     document.getElementById('current-room-code').textContent = currentRoomId;
     setLocalVideoLabel(currentName + ' (' + i18nT('call.you') + ')');
     await applyNoiseSuppression(stream);
+    if (typeof plausibleTrack === 'function') plausibleTrack('call_started');
     await connectToRoom(stream);
 }
 
@@ -1049,7 +1065,20 @@ async function connectToRoom(preStream) {
             if (typeof onLocalTrackUnpublishedExtra === 'function') onLocalTrackUnpublishedExtra(pub);
         })
         .on(RoomEvent.DataReceived, onDataReceived)
-        .on(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged);
+        .on(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged)
+        .on(RoomEvent.SignalReconnecting, function() {
+            console.log('LiveKit: signal reconnecting');
+            if (typeof showReconnectIndicator === 'function') showReconnectIndicator('reconnecting');
+        })
+        .on(RoomEvent.Reconnecting, function() {
+            console.log('LiveKit: reconnecting');
+            if (typeof showReconnectIndicator === 'function') showReconnectIndicator('reconnecting');
+        })
+        .on(RoomEvent.Reconnected, function() {
+            console.log('LiveKit: reconnected');
+            if (typeof showReconnectIndicator === 'function') showReconnectIndicator('reconnected');
+            if (typeof plausibleTrack === 'function') plausibleTrack('connection_recovered');
+        });
 
     // 4. Connect
     try {
@@ -2228,6 +2257,7 @@ function toggleChatPanel() {
 let participantsOpen = false;
 function toggleParticipantsPanel(e) {
     if (e) { try { e.stopPropagation(); } catch(_){} }
+    if (!participantsOpen && typeof plausibleTrack === 'function') plausibleTrack('settings_opened');
     participantsOpen = !participantsOpen;
     var panel = document.getElementById('participants-panel');
     console.log('[pp] toggle ->', participantsOpen);
@@ -2592,6 +2622,7 @@ async function __recoverOne(kind) {
         if (alive) {
             console.log('[devices] ' + kind + ' verified ✓');
             if (isMic) __micAttempts = 0; else __camAttempts = 0;
+            if (typeof plausibleTrack === 'function') plausibleTrack('device_switched', { type: kind });
         } else {
             __recoverOne(kind);
         }
@@ -2753,6 +2784,7 @@ function sendReaction(emoji) {
             var payload = new TextEncoder().encode(JSON.stringify({ type: 'reaction', emoji: emoji }));
             room.localParticipant.publishData(payload, { reliable: true, topic: REACTIONS_TOPIC });
             console.log('[reactions] sent', emoji);
+            if (typeof plausibleTrack === 'function') plausibleTrack('reaction_sent');
         }
     } catch (e) { console.warn('[reactions] send failed:', e); }
 }
@@ -2999,7 +3031,21 @@ function initHotkeyInputs() {
 window.initHotkeyInputs = initHotkeyInputs;
 
 // Global keydown listener for hotkeys
+// Helper: check if we are inside an active call
+function __inCall() {
+    try {
+        var callScreen = document.getElementById('call-screen');
+        if (!callScreen) return false;
+        // display: none => not in call
+        var display = window.getComputedStyle(callScreen).display;
+        return display !== 'none';
+    } catch (e) { return false; }
+}
+window.__inCall = __inCall;
+
 document.addEventListener('keydown', function(e) {
+    // Only handle hotkeys inside call screen
+    if (!__inCall()) return;
     // Escape — close panels, no sound
     if (e.key === 'Escape') {
         if (typeof participantsOpen !== 'undefined' && participantsOpen) {
@@ -3031,6 +3077,7 @@ document.addEventListener('keydown', function(e) {
     if (!handled) return;
     e.preventDefault();
     playHotkeySound(handled);
+    if (typeof plausibleTrack === 'function') plausibleTrack('hotkey_used', { key: handled });
     if (handled === 'mute' && typeof toggleMic === 'function') toggleMic();
     else if (handled === 'video' && typeof toggleCam === 'function') toggleCam();
     else if (handled === 'chat' && typeof toggleChatPanel === 'function') toggleChatPanel();
@@ -3126,6 +3173,7 @@ async function sendChatMessage(text) {
             topic: CHAT_TOPIC
         });
         console.log('[chat] publishData: OK');
+        if (typeof plausibleTrack === 'function') plausibleTrack('chat_message_sent');
     } catch (e) {
         console.error('[chat] publishData FAILED:', e);
         showToast(i18nT('error.sendMessage'));
@@ -3173,7 +3221,7 @@ function submitRating() {
                 userAgent: (navigator.userAgent || '').slice(0, 200)
             })
         }).then(r => r.json())
-          .then(d => console.log('[feedback] sent:', d))
+          .then(d => { console.log('[feedback] sent:', d); if (typeof plausibleTrack === 'function') plausibleTrack('feedback_submitted', { rating: rating }); })
           .catch(e => console.warn('[feedback] failed:', e));
     }
 
@@ -3349,6 +3397,7 @@ async function toggleScreenShare() {
             audio: true
         });
         if (btn) btn.classList.toggle('active', !currently);
+        if (!currently && typeof plausibleTrack === 'function') plausibleTrack('screen_shared');
         console.log('[toggleScreenShare]', { was: currently, now: !currently });
     } catch (e) {
         console.warn('Screen share failed:', e);
@@ -3764,6 +3813,9 @@ document.addEventListener('keydown', (e) => {
 })();
 
 // ============ PWA: Service Worker registration ============
+if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) {
+    if (typeof plausibleTrack === 'function') plausibleTrack('pwa_installed');
+}
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js', { scope: '/' })

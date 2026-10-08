@@ -1,8 +1,9 @@
 #!/bin/bash
+
+[ -f /etc/vidma.env ] && set -a && . /etc/vidma.env && set +a
 # Watches vidma events + feedback logs, sends to Telegram on new entries.
 
-BOT_TOKEN="REDACTED_OLD_TOKEN"
-CHAT_ID="1415377874"
+CHAT_ID="${TG_CHAT_ID:-1415377874}"
 PROXY="socks5h://127.0.0.1:1080"
 EVENTS_LOG="/opt/vidma/vidma_events.log"
 FEEDBACK_LOG="/var/log/vidma-feedback.jsonl"

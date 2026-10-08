@@ -1,9 +1,10 @@
 #!/bin/bash
+
+[ -f /etc/vidma.env ] && set -a && . /etc/vidma.env && set +a
 # Vidma health monitoring
 # Проверяет /api/health каждую минуту (из cron), при падении шлёт в Telegram
 
-BOT_TOKEN="REDACTED_OLD_TOKEN"
-CHAT_ID="1415377874"
+CHAT_ID="${TG_CHAT_ID:-1415377874}"
 PROXY="socks5h://127.0.0.1:1080"
 URL="https://vidma.online/api/health"
 STATE_FILE="/var/lib/vidma-monitor.state"
