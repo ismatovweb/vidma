@@ -46,9 +46,6 @@ private:
     int turnTlsPort_;
     int64_t startTime_;
 
-    std::unordered_map<std::string, httplib::ws::WebSocket*> sessions_;
-    std::shared_mutex sessionsMutex_;
-
     mutable std::mutex logMutex_;
 
     // ---- base64 (no external deps beyond OpenSSL for HMAC) ----
@@ -612,158 +609,6 @@ private:
         });
     }
 
-    void setupWebSocketRoutes() {
-        httpServer_.WebSocket("/ws", [this](const httplib::Request& req, httplib::ws::WebSocket& ws) {
-            if (!originAllowed(req)) {
-                ws.close(httplib::ws::CloseStatus::PolicyViolation);
-                return;
-            }
-
-            std::string sessionId;
-            std::string roomId;
-            std::string name;
-            bool joined = false;
-
-            std::string msg;
-            httplib::ws::ReadResult ret;
-            while ((ret = ws.read(msg)) != httplib::ws::Fail) {
-                if (ret != httplib::ws::Text) continue;
-                if (msg.size() > MAX_MESSAGE_SIZE) {
-                    ws.close(httplib::ws::CloseStatus::MessageTooBig);
-                    break;
-                }
-                try {
-                    json j = json::parse(msg);
-                    std::string type = j.value("type", std::string{});
-
-                    if (type == "join" && !joined) {
-                        roomId = j.value("roomId", std::string{});
-                        name   = j.value("name",   std::string{});
-
-                        if (!isValidRoomId(roomId) || !isValidName(name)) {
-                            json e; e["type"] = "error"; e["message"] = "invalid_input";
-                            ws.send(e.dump());
-                            ws.close(httplib::ws::CloseStatus::PolicyViolation);
-                            return;
-                        }
-                        if (!roomManager_.roomExists(roomId)) {
-                            json e; e["type"] = "error"; e["message"] = "room_not_found";
-                            ws.send(e.dump());
-                            ws.close(httplib::ws::CloseStatus::Normal);
-                            return;
-                        }
-                        if (roomManager_.getParticipantCount(roomId) >= MAX_PARTICIPANTS_PER_ROOM) {
-                            json e; e["type"] = "error"; e["message"] = "room_full";
-                            ws.send(e.dump());
-                            ws.close(httplib::ws::CloseStatus::PolicyViolation);
-                            return;
-                        }
-
-                        sessionId = generateSecureSessionId();
-                        auto existing = roomManager_.getAllParticipants(roomId);
-                        roomManager_.addParticipant(roomId, sessionId, name);
-                        joined = true;
-                        {
-                            std::unique_lock lock(sessionsMutex_);
-                            sessions_[sessionId] = &ws;
-                        }
-
-                        std::string safeName = name;
-                        for (auto& c : safeName) {
-                            if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=') c = '_';
-                        }
-                        if (safeName.size() > 32) safeName = safeName.substr(0, 32);
-                        {
-                            size_t cnt = roomManager_.getParticipantCount(roomId);
-                            logEvent("join room=" + roomId + " sid=" + sessionId +
-                                     " name=" + safeName + " count=" + std::to_string(cnt));
-                        }
-
-                        json joinedMsg;
-                        joinedMsg["type"]             = "joined";
-                        joinedMsg["roomId"]           = roomId;
-                        joinedMsg["sessionId"]        = sessionId; // server-issued
-                        joinedMsg["participantCount"] = roomManager_.getParticipantCount(roomId);
-                        ws.send(joinedMsg.dump());
-
-                        for (const auto& [eid, ename] : existing) {
-                            json m;
-                            m["type"]      = "new-peer";
-                            m["sessionId"] = eid;
-                            m["name"]      = ename;
-                            m["existing"]  = true;
-                            ws.send(m.dump());
-                        }
-
-                        json newPeer;
-                        newPeer["type"]      = "new-peer";
-                        newPeer["sessionId"] = sessionId;
-                        newPeer["name"]      = name;
-                        broadcastToRoom(roomId, newPeer.dump(), sessionId);
-                    }
-                    else if (joined && (type == "offer" || type == "answer" || type == "ice-candidate")) {
-                        std::string target = j.value("target", std::string{});
-                        if (target.empty()) continue;
-                        if (!roomManager_.isInRoom(target, roomId)) continue;
-                        j["sender"] = sessionId;
-                        forwardToSession(target, j.dump());
-                    }
-                } catch (...) {
-                    // ignore malformed
-                }
-            }
-
-            if (joined) {
-                std::string safeName = name;
-                for (auto& c : safeName) {
-                    if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '=') c = '_';
-                }
-                if (safeName.size() > 32) safeName = safeName.substr(0, 32);
-                {
-                    size_t remaining = roomManager_.getParticipantCount(roomId);
-                    logEvent("leave room=" + roomId + " sid=" + sessionId +
-                             " name=" + safeName + " remaining=" + std::to_string(remaining));
-                }
-                roomManager_.removeParticipant(roomId, sessionId);
-                {
-                    size_t after = roomManager_.getParticipantCount(roomId);
-                    if (after == 0) {
-                        logEvent("room_closed id=" + roomId + " last_user=" + safeName);
-                    }
-                }
-
-                json left;
-                left["type"]      = "peer-left";
-                left["sessionId"] = sessionId;
-                broadcastToRoom(roomId, left.dump(), sessionId);
-
-                std::unique_lock lock(sessionsMutex_);
-                sessions_.erase(sessionId);
-            }
-        });
-    }
-
-    void broadcastToRoom(const std::string& roomId, const std::string& message,
-                         const std::string& excludeSessionId) {
-        auto ids = roomManager_.getParticipantIds(roomId);
-        std::shared_lock lock(sessionsMutex_);
-        for (const auto& id : ids) {
-            if (id == excludeSessionId) continue;
-            auto it = sessions_.find(id);
-            if (it != sessions_.end() && it->second && it->second->is_open()) {
-                it->second->send(message);
-            }
-        }
-    }
-
-    void forwardToSession(const std::string& target, const std::string& message) {
-        std::shared_lock lock(sessionsMutex_);
-        auto it = sessions_.find(target);
-        if (it != sessions_.end() && it->second && it->second->is_open()) {
-            it->second->send(message);
-        }
-    }
-
 public:
     explicit VideoCallServer(unsigned short port = 8080) : port_(port), startTime_((int64_t)std::time(nullptr)) {
         const char* secret = std::getenv("TURN_SECRET");
@@ -781,7 +626,6 @@ public:
             std::cerr << "[WARN] TURN_SECRET not set — /api/turn-credentials will return 503\n";
         }
         setupHttpRoutes();
-        setupWebSocketRoutes();
     }
 
     void start() {
