@@ -53,8 +53,11 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     
     
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <link rel="icon" type="image/png" sizes="256x256" href="/logo.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="mask-icon" href="/favicon-192.png" color="#7c3aed">
     <meta name="msapplication-TileColor" content="#7c3aed">
     
     <style>
