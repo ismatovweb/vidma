@@ -321,14 +321,35 @@ private:
         }
     }
 
+    static bool isAllowedOrigin(const std::string& o) {
+        static const char* allowed[] = {
+            "https://vidma.online",
+            "https://www.vidma.online",
+            "http://vidma.online",
+            "http://localhost:8080",
+            "http://localhost:3000",
+            "http://127.0.0.1:8080",
+            nullptr
+        };
+        for (int i = 0; allowed[i]; ++i) if (o == allowed[i]) return true;
+        return false;
+    }
+
+    static std::string clientIp(const httplib::Request& req) {
+        auto it = req.headers.find("X-Real-IP");
+        if (it != req.headers.end() && !it->second.empty()) return it->second;
+        auto xff = req.headers.find("X-Forwarded-For");
+        if (xff != req.headers.end() && !xff->second.empty()) {
+            auto c = xff->second.find(',');
+            return c == std::string::npos ? xff->second : xff->second.substr(0, c);
+        }
+        return req.remote_addr;
+    }
+
     bool originAllowed(const httplib::Request& req) const {
         auto it = req.headers.find("Origin");
-        if (it == req.headers.end()) return true; // non-browser or same-origin
-        const std::string& o = it->second;
-        if (o.find("vidma.online") != std::string::npos) return true;
-        if (o.find("localhost") != std::string::npos) return true;
-        if (o.find("127.0.0.1") != std::string::npos) return true;
-        return false;
+        if (it == req.headers.end()) return true;
+        return isAllowedOrigin(it->second);
     }
 
     void setupHttpRoutes() {
@@ -468,7 +489,28 @@ private:
             res.set_content(j.dump(), "application/json");
         });
 
-        httpServer_.Get("/api/turn-credentials", [this](const httplib::Request&, httplib::Response& res) {
+        httpServer_.Get("/api/turn-credentials", [this](const httplib::Request& req, httplib::Response& res) {
+            auto oit = req.headers.find("Origin");
+            if (oit != req.headers.end() && !isAllowedOrigin(oit->second)) {
+                res.status = 403;
+                res.set_content(R"({"error":"forbidden_origin"})", "application/json");
+                return;
+            }
+            static std::mutex rlM;
+            static std::unordered_map<std::string, std::pair<int64_t, int>> rlMap;
+            std::string ip = clientIp(req);
+            int64_t now = (int64_t)std::time(nullptr);
+            {
+                std::lock_guard<std::mutex> lk(rlM);
+                auto& e = rlMap[ip];
+                if (now - e.first > 60) { e.first = now; e.second = 0; }
+                if (++e.second > 10) {
+                    res.status = 429;
+                    res.set_header("Retry-After", "60");
+                    res.set_content(R"({"error":"rate_limited"})", "application/json");
+                    return;
+                }
+            }
             if (turnSecret_.empty()) {
                 res.status = 503;
                 res.set_content(R"({"error":"turn_not_configured"})", "application/json");
@@ -491,12 +533,40 @@ private:
         });
 
         httpServer_.Post("/api/feedback", [this](const httplib::Request& req, httplib::Response& res) {
+            auto oit = req.headers.find("Origin");
+            if (oit != req.headers.end() && !isAllowedOrigin(oit->second)) {
+                res.status = 403;
+                res.set_content(R"({"status":"error","message":"forbidden_origin"})", "application/json");
+                return;
+            }
+            if (req.body.size() > 8192) {
+                res.status = 413;
+                res.set_content(R"({"status":"error","message":"body_too_large"})", "application/json");
+                return;
+            }
+            static std::mutex fbM;
+            static std::unordered_map<std::string, std::pair<int64_t, int>> fbMap;
+            std::string fip = clientIp(req);
+            int64_t fnow = (int64_t)std::time(nullptr);
+            {
+                std::lock_guard<std::mutex> lk(fbM);
+                auto& e = fbMap[fip];
+                if (fnow - e.first > 60) { e.first = fnow; e.second = 0; }
+                if (++e.second > 5) {
+                    res.status = 429;
+                    res.set_header("Retry-After", "60");
+                    res.set_content(R"({"status":"error","message":"rate_limited"})", "application/json");
+                    return;
+                }
+            }
             try {
                 json b = json::parse(req.body);
                 json entry;
                 entry["ts"]         = (int64_t)std::time(nullptr);
                 entry["roomId"]     = b.value("roomId", std::string("unknown"));
-                entry["rating"]     = b.value("rating", 0);
+                int rv = b.value("rating", 0);
+                if (rv < 0 || rv > 5) rv = 0;
+                entry["rating"]     = rv;
                 entry["comment"]    = b.value("comment", std::string());
                 entry["userAgent"]  = b.value("userAgent", std::string());
                 entry["ipHash"]     = clientIpHash(req);
@@ -595,7 +665,7 @@ private:
             res.set_content(j.dump(), "application/json");
         });
 
-        httpServer_.Get(R"(/api/room/([^/]+)/exists)", [this](const httplib::Request& req, httplib::Response& res) {
+        httpServer_.Get(R"(/api/room/([0-9\-]+)/exists)", [this](const httplib::Request& req, httplib::Response& res) {
             std::string roomId = req.matches[1];
             if (!isValidRoomId(roomId)) {
                 res.status = 400;
@@ -625,6 +695,9 @@ public:
         if (turnSecret_.empty()) {
             std::cerr << "[WARN] TURN_SECRET not set — /api/turn-credentials will return 503\n";
         }
+        httpServer_.set_payload_max_length(MAX_MESSAGE_SIZE);
+        httpServer_.set_read_timeout(15, 0);
+        httpServer_.set_write_timeout(15, 0);
         setupHttpRoutes();
     }
 
