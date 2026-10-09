@@ -192,9 +192,6 @@ button, a, [role="button"], .control-btn, .chat-reaction { touch-action: manipul
         #local-camera-container { display: none; position: fixed; bottom: 90px; right: 180px; width: 120px; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; box-shadow: 0 12px 28px rgba(0,0,0,0.5); border: 2px solid rgba(255,255,255,0.2); z-index: 21; background: #1a1a2a; }
         #local-camera-container video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #local-camera-container .video-label { position: absolute; bottom: 4px; left: 6px; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); color: white; padding: 2px 8px; border-radius: 20px; font-size: 0.65rem; }
-        @media (orientation: landscape) and (max-height: 600px) {
-            #videos-container { max-height: calc(100vh - 180px); overflow-y: auto; }
-        }
         .controls { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); height: 60px; background: rgba(20,20,30,0.7); backdrop-filter: blur(16px); display: flex; justify-content: center; align-items: center; gap: 12px; padding: 0 24px; border-radius: 30px; z-index: 40; border: 1px solid rgba(255,255,255,0.1); }
         .control-btn { width: 44px; height: 44px; border-radius: 22px; border: none; background: #3a3a55; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s; }
         .control-btn svg { stroke: currentColor; fill: none; width: 20px; height: 20px; }
@@ -2457,31 +2454,39 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
 }
 
 /* ============================================================
-   === Landscape phone UX (iPhone + Android) — full rework ===
+   === Landscape phone UX v2 — overlay bars + auto-hide ===
    ============================================================
-   Проблема: top-bar (~110px) + controls (60px) перекрывали видео
-   в горизонтальной ориентации. Здесь всё компактно и с учётом
-   safe-area-inset-left/right (чёлка iPhone сбоку).
+   Бары — оверлеи поверх видео. Видео на всю высоту.
+   Через 3 сек без тапа — бары плавно уезжают за край.
+   Тап по видео — показать бары снова.
    ============================================================ */
 
 @media (orientation: landscape) and (max-height: 500px) {
 
-    /* --- Top-bar: одна строка, минимум --- */
+    /* Top-bar — фиксированный оверлей */
     .top-bar {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important; right: 0 !important;
+        z-index: 100 !important;
         padding: 4px 8px !important;
         padding-left: calc(8px + env(safe-area-inset-left, 0px)) !important;
         padding-right: calc(8px + env(safe-area-inset-right, 0px)) !important;
+        background: rgba(0, 0, 0, 0.55) !important;
+        backdrop-filter: blur(14px) saturate(140%) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(140%) !important;
+        border-bottom: 1px solid rgba(255,255,255,0.08) !important;
+        transition: transform 0.32s cubic-bezier(.4,0,.2,1),
+                    opacity 0.32s ease !important;
+        will-change: transform, opacity !important;
     }
     .top-status-row {
         margin-bottom: 4px !important;
         gap: 4px !important;
     }
-    /* Beta + Connection — уменьшаем, но не скрываем */
     .top-status-row .security-bar {
         font-size: 0.62rem !important;
         padding: 3px 8px !important;
     }
-    /* Room-info-bar — компактный, одной строкой */
     .room-info-bar {
         padding: 4px 12px !important;
         gap: 8px !important;
@@ -2497,44 +2502,54 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         font-size: 0.7rem !important;
         gap: 2px !important;
     }
-    .room-info-bar .share-btn svg {
-        width: 11px !important;
-        height: 11px !important;
-    }
+    .room-info-bar .share-btn svg { width: 11px !important; height: 11px !important; }
 
-    /* --- Videos container — использовать больше высоты --- */
+    /* Videos-container — на всю высоту */
     #videos-container {
-        top: 62px !important;
-        bottom: 62px !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
         padding: 2px 6px !important;
         padding-left: calc(6px + env(safe-area-inset-left, 0px)) !important;
         padding-right: calc(6px + env(safe-area-inset-right, 0px)) !important;
+        z-index: 1 !important;
     }
 
-    /* --- Controls — компактнее, поверх видео --- */
+    /* Controls — фиксированный оверлей по центру снизу */
     .controls {
+        position: fixed !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 100 !important;
         height: 46px !important;
         padding: 0 10px !important;
         gap: 6px !important;
-        bottom: calc(6px + env(safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
         border-radius: 24px !important;
+        background: rgba(0, 0, 0, 0.55) !important;
+        backdrop-filter: blur(14px) saturate(140%) !important;
+        -webkit-backdrop-filter: blur(14px) saturate(140%) !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        transition: transform 0.32s cubic-bezier(.4,0,.2,1),
+                    opacity 0.32s ease !important;
+        will-change: transform, opacity !important;
     }
     .control-btn {
         width: 36px !important;
         height: 36px !important;
         border-radius: 18px !important;
     }
-    .control-btn svg {
-        width: 16px !important;
-        height: 16px !important;
-    }
+    .control-btn svg { width: 16px !important; height: 16px !important; }
 
-    /* --- Local video (PiP) — уменьшить --- */
+    /* Local video (PiP) — уменьшить и сместить выше controls */
     #local-video-container {
         width: 100px !important;
-        bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+        bottom: calc(70px + env(safe-area-inset-bottom, 0px)) !important;
         right: calc(8px + env(safe-area-inset-right, 0px)) !important;
         border-radius: 12px !important;
+        z-index: 50 !important;
+        transition: transform 0.32s ease, opacity 0.32s ease !important;
     }
     #local-video-container .video-label {
         font-size: 0.6rem !important;
@@ -2552,40 +2567,40 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         height: 22px !important;
     }
 
-    /* --- Chat panel — во всю высоту --- */
+    /* Chat panel — во всю высоту */
     #chat-panel {
         width: 320px !important;
         padding-top: env(safe-area-inset-top, 0px) !important;
         padding-bottom: env(safe-area-inset-bottom, 0px) !important;
     }
-    #chat-header {
-        padding: 10px 14px !important;
+    #chat-header { padding: 10px 14px !important; }
+    #chat-messages { padding: 8px !important; }
+    #chat-reactions-bar { padding: 6px 8px !important; }
+    .chat-reaction { font-size: 18px !important; }
+
+    #participants-panel { max-height: 85vh !important; }
+
+    /* ============ СОСТОЯНИЕ: UI СКРЫТ ============ */
+    body.ui-hidden .top-bar {
+        transform: translateY(-110%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
-    #chat-messages {
-        padding: 8px !important;
+    body.ui-hidden .controls {
+        transform: translateX(-50%) translateY(140%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
-    #chat-reactions-bar {
-        padding: 6px 8px !important;
-    }
-    .chat-reaction {
-        font-size: 18px !important;
+    body.ui-hidden #local-video-container {
+        transform: translateX(140%) !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 
-    /* --- Participants panel — компактнее --- */
-    #participants-panel {
-        max-height: 85vh !important;
-    }
-
-    /* --- Убираем лишнее на очень маленькой высоте --- */
+    /* ============ Очень маленькая высота ============ */
     @media (max-height: 380px) {
-        /* Скрываем Beta badge в landscape iPhone */
-        #beta-indicator {
-            display: none !important;
-        }
-        /* Скрываем подпись "Быстрые реакции" в landscape на очень низком экране */
-        .chat-reactions-label {
-            display: none !important;
-        }
+        #beta-indicator { display: none !important; }
+        .chat-reactions-label { display: none !important; }
     }
 }
 
@@ -2601,6 +2616,106 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     }
 }
 
+
+/* ============================================================
+   === Landscape phone — видео целиком, мягкий тёмный фон ===
+   ============================================================
+   - contain: собеседник виден полностью, без обрезки
+   - фон: тёмный с мягким градиентом, чтобы полосы не «резали»
+   - плитка: сохраняет AR видео, центрируется
+   ============================================================ */
+@media (orientation: landscape) and (max-height: 500px) {
+
+    /* Контейнер — на весь экран */
+    #videos-container {
+        top: 0 !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        max-height: none !important;
+        overflow: hidden !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: #0a0a0f !important;
+        background-image: radial-gradient(ellipse at center, #14141f 0%, #050508 100%) !important;
+    }
+
+    /* Сетка — на всю высоту */
+    #videos-container > * {
+        width: 100% !important;
+        height: 100% !important;
+        max-height: 100% !important;
+        padding: 0 !important;
+    }
+
+    /* Плитка видео — на всю площадь, но видео внутри по центру */
+    .video-tile,
+    .remote-video-wrapper,
+    .remote-camera-wrapper {
+        height: 100% !important;
+        max-height: 100% !important;
+        width: 100% !important;
+        max-width: none !important;
+        aspect-ratio: auto !important;
+        border-radius: 0 !important;
+        margin: 0 !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    /* Видео — вписываем целиком, с сохранением пропорций */
+    .video-tile video,
+    .remote-video-wrapper video,
+    .remote-camera-wrapper video {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: contain !important;
+        border-radius: 0 !important;
+    }
+
+    /* Множественные участники — сетка */
+    #videos-container.grid-2,
+    #videos-container.grid-3,
+    #videos-container.grid-4 {
+        gap: 6px !important;
+        padding: 6px !important;
+    }
+    #videos-container.grid-2 > *,
+    #videos-container.grid-3 > *,
+    #videos-container.grid-4 > * {
+        border-radius: 10px !important;
+        overflow: hidden !important;
+        background: radial-gradient(ellipse at center, #14141f 0%, #050508 100%) !important;
+    }
+
+    /* Local PiP — компактно в углу */
+    #local-video-container {
+        width: 110px !important;
+        height: 82px !important;
+        aspect-ratio: auto !important;
+        bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
+        right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+        border-radius: 10px !important;
+        z-index: 50 !important;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.5) !important;
+    }
+    #local-video-container video {
+        object-fit: cover !important;
+    }
+
+    /* Лейбл имени — компактно */
+    .video-label {
+        font-size: 0.7rem !important;
+        padding: 2px 8px !important;
+        bottom: 6px !important;
+        left: 8px !important;
+    }
+}
 </style>
     <script type="application/ld+json">
     {

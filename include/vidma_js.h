@@ -3421,6 +3421,143 @@ async function joinWithoutCamera() {
 // ---------------------------------------------------------------------
 // URL ?room= auto-fill
 // ---------------------------------------------------------------------
+
+// =====================================================================
+// Landscape phone: auto-hide bars (iPhone/Android landscape)
+// =====================================================================
+(function() {
+    if (!window.matchMedia) return;
+    var mq = window.matchMedia('(orientation: landscape) and (max-height: 500px)');
+    var hideTimer = null;
+    var HIDE_AFTER_MS = 3000;
+
+    function isLandscapePhone() { return mq.matches; }
+
+    function __applyUI(visible) {
+        var targets = document.querySelectorAll('.top-bar, .controls');
+        targets.forEach(function(el) {
+            if (!el) return;
+            if (visible) {
+                el.style.transform = '';
+                el.style.opacity = '';
+                el.style.visibility = '';
+                el.style.pointerEvents = '';
+                el.style.transition = 'transform 0.32s cubic-bezier(.4,0,.2,1), opacity 0.32s ease';
+            } else {
+                el.style.transition = 'transform 0.32s cubic-bezier(.4,0,.2,1), opacity 0.32s ease';
+                if (el.classList.contains('controls')) {
+                    el.style.transform = 'translateX(-50%) translateY(300vh)';
+                } else {
+                    el.style.transform = 'translateY(-300vh)';
+                }
+                el.style.opacity = '0';
+                el.style.visibility = 'hidden';
+                el.style.pointerEvents = 'none';
+            }
+        });
+        // PiP тоже уезжает
+        var pip = document.getElementById('local-video-container');
+        if (pip) {
+            if (visible) {
+                pip.style.transform = '';
+                pip.style.opacity = '';
+                pip.style.visibility = '';
+                pip.style.pointerEvents = '';
+            } else {
+                pip.style.transition = 'transform 0.32s ease, opacity 0.32s ease';
+                pip.style.transform = 'translateX(300%)';
+                pip.style.opacity = '0';
+                pip.style.pointerEvents = 'none';
+            }
+        }
+    }
+
+    function showUI() {
+        if (!isLandscapePhone()) return;
+        document.body.classList.remove('ui-hidden');
+        __applyUI(true);
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = setTimeout(hideUI, HIDE_AFTER_MS);
+    }
+
+    function hideUI() {
+        if (!isLandscapePhone()) return;
+        document.body.classList.add('ui-hidden');
+        __applyUI(false);
+    }
+
+    function toggleUI() {
+        if (!isLandscapePhone()) return;
+        if (document.body.classList.contains('ui-hidden')) showUI();
+        else hideUI();
+    }
+
+    function onOrientChange() {
+        if (isLandscapePhone()) {
+            // при входе в landscape — сразу скрыть бары
+            hideUI();
+        } else {
+            document.body.classList.remove('ui-hidden');
+            __applyUI(true);
+            if (hideTimer) clearTimeout(hideTimer);
+        }
+    }
+
+    // Следим за сменой ориентации
+    if (mq.addEventListener) mq.addEventListener('change', onOrientChange);
+    else if (mq.addListener) mq.addListener(onOrientChange);
+
+    // Инициализация + тап-обработчик
+    document.addEventListener('DOMContentLoaded', function() {
+        if (isLandscapePhone()) {
+            hideUI();
+        }
+
+        var vc = document.getElementById('videos-container');
+        if (!vc) return;
+
+        var tapStartX = 0, tapStartY = 0, tapStartT = 0;
+        var TAP_MAX_MS = 300;
+        var TAP_MAX_DIST = 12;
+
+        vc.addEventListener('touchstart', function(e) {
+            if (!isLandscapePhone()) return;
+            var t = e.touches[0];
+            tapStartX = t.clientX;
+            tapStartY = t.clientY;
+            tapStartT = Date.now();
+        }, { passive: true });
+
+        vc.addEventListener('touchend', function(e) {
+            if (!isLandscapePhone()) return;
+            // Игнорируем, если тап по элементам управления
+            if (e.target.closest && (e.target.closest('.controls') ||
+                                     e.target.closest('.top-bar') ||
+                                     e.target.closest('#local-video-container') ||
+                                     e.target.closest('#chat-panel') ||
+                                     e.target.closest('button'))) return;
+            var t = e.changedTouches[0];
+            var dx = t.clientX - tapStartX;
+            var dy = t.clientY - tapStartY;
+            var dt = Date.now() - tapStartT;
+            var dist = Math.sqrt(dx*dx + dy*dy);
+            if (dt <= TAP_MAX_MS && dist <= TAP_MAX_DIST) {
+                toggleUI();
+            }
+        }, { passive: true });
+
+        // Двойной клик мышью — для десктопных тестов
+        vc.addEventListener('click', function(e) {
+            if (!isLandscapePhone()) return;
+            if (e.target.closest && (e.target.closest('.controls') ||
+                                     e.target.closest('.top-bar'))) return;
+            toggleUI();
+        });
+
+        console.log('[landscape] auto-hide UI initialized');
+    });
+})();
+
 document.addEventListener('DOMContentLoaded', async () => {
     await i18nLoad();
     maybeShowCookieBanner();
