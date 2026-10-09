@@ -12,27 +12,37 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
 
 
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#121212">
     <link rel="manifest" href="/manifest.json">
-    <title data-i18n="app.title">Vidma — Free Video Calls</title>
-    <meta name="description" content="Vidma — видеозвонки без регистрации и ограничений по времени. Создайте комнату и общайтесь с друзьями или коллегами по видеосвязи прямо в браузере.">
+    <title>Vidma — Free Video Calls Without Registration</title>
+    <meta name="description" content="Vidma is a free browser-based video calling service. Create a room in seconds, invite friends — no registration, no downloads, works on any device.">
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+    <link rel="alternate" hreflang="x-default" href="https://vidma.online/">
+    <link rel="alternate" hreflang="en" href="https://vidma.online/?lang=en">
+    <link rel="alternate" hreflang="ru" href="https://vidma.online/?lang=ru">
+    <link rel="alternate" hreflang="es" href="https://vidma.online/?lang=es">
+    <link rel="alternate" hreflang="de" href="https://vidma.online/?lang=de">
+    <link rel="alternate" hreflang="fr" href="https://vidma.online/?lang=fr">
+    <link rel="alternate" hreflang="zh" href="https://vidma.online/?lang=zh">
+    <link rel="alternate" hreflang="ja" href="https://vidma.online/?lang=ja">
+    <link rel="alternate" hreflang="pt" href="https://vidma.online/?lang=pt">
     <meta name="keywords" content="видеозвонки, видеоконференции, бесплатные звонки, без регистрации, созвон, видеосвязь, комната, WebRTC">
     <link rel="canonical" href="https://vidma.online/">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://vidma.online/">
-    <meta property="og:title" content="Vidma — Free Video Calls">
-    <meta property="og:description" content="Join my video call in one click. No registration, encrypted, works in browser.">
+    <meta property="og:title" content="Vidma — Free Video Calls Without Registration">
+    <meta property="og:description" content="Join a video call in one click. No registration, end-to-end encrypted, works in your browser.">
     <meta property="og:image" content="https://vidma.online/og-image.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="Vidma">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Vidma — Free Video Calls">
-    <meta name="twitter:description" content="Join my video call in one click. No registration, encrypted, works in browser.">
+    <meta name="twitter:title" content="Vidma — Free Video Calls Without Registration">
+    <meta name="twitter:description" content="Join a video call in one click. No registration, end-to-end encrypted, works in your browser.">
     <meta name="twitter:image" content="https://vidma.online/og-image.png">
     
     
@@ -2716,17 +2726,95 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         left: 8px !important;
     }
 }
+
+        .hero-title {
+            display: block;
+            font-size: clamp(1.5rem, 4vw, 2.2rem);
+            font-weight: 800;
+            text-align: center;
+            margin: 1.2rem 0 0.4rem;
+            color: #e0e0e0;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+        }
 </style>
     <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebApplication",
-      "name": "Vidma",
-      "url": "https://vidma.online",
-      "description": "Бесплатные видеозвонки без регистрации. Создайте комнату и пригласите участников.",
-      "applicationCategory": "CommunicationApplication",
-      "operatingSystem": "All"
-    }
+[
+      {
+            "@context": "https://schema.org",
+            "@type": "Organization",
+            "name": "Vidma",
+            "url": "https://vidma.online/",
+            "logo": "https://vidma.online/logo.png"
+      },
+      {
+            "@context": "https://schema.org",
+            "@type": "WebSite",
+            "name": "Vidma",
+            "url": "https://vidma.online/"
+      },
+      {
+            "@context": "https://schema.org",
+            "@type": "WebApplication",
+            "name": "Vidma",
+            "url": "https://vidma.online/",
+            "description": "Free browser-based video calling. No registration required.",
+            "applicationCategory": "CommunicationApplication",
+            "operatingSystem": "Web",
+            "browserRequirements": "Requires WebRTC support",
+            "offers": {
+                  "@type": "Offer",
+                  "price": "0",
+                  "priceCurrency": "USD"
+            }
+      },
+      {
+            "@context": "https://schema.org",
+            "@type": "FAQPage",
+            "mainEntity": [
+                  {
+                        "@type": "Question",
+                        "name": "Do I need to register?",
+                        "acceptedAnswer": {
+                              "@type": "Answer",
+                              "text": "No. Vidma is completely free and requires no account. Just enter a name (or leave it as Guest) and start a call."
+                        }
+                  },
+                  {
+                        "@type": "Question",
+                        "name": "Are my calls private?",
+                        "acceptedAnswer": {
+                              "@type": "Answer",
+                              "text": "Yes. Video and audio are encrypted end-to-end using DTLS-SRTP. We never record calls or store call history. Chat is E2EE via LiveKit DataChannel."
+                        }
+                  },
+                  {
+                        "@type": "Question",
+                        "name": "How many people can join a room?",
+                        "acceptedAnswer": {
+                              "@type": "Answer",
+                              "text": "Up to 20 participants per room. For larger meetings, contact us."
+                        }
+                  },
+                  {
+                        "@type": "Question",
+                        "name": "Does it work on mobile?",
+                        "acceptedAnswer": {
+                              "@type": "Answer",
+                              "text": "Yes. Vidma works on iPhone, iPad, Android phones and tablets through any modern browser. No app required."
+                        }
+                  },
+                  {
+                        "@type": "Question",
+                        "name": "Is Vidma open source?",
+                        "acceptedAnswer": {
+                              "@type": "Answer",
+                              "text": "Yes. The full source code is available on GitHub under AGPL-3.0 license."
+                        }
+                  }
+            ]
+      }
+]
     </script>
     <link rel="preload" as="image" href="/logo.png">
     <script defer data-domain="vidma.online" src="https://status.vidma.online/js/script.js"></script>
@@ -2803,7 +2891,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
             </div>
             
             
-            <h1 style="position:absolute; opacity:0; pointer-events:none;">Бесплатные видеозвонки Vidma</h1>
+            <h1 class="hero-title" data-i18n="app.title">Vidma — Free Video Calls</h1>
             <div class="subtitle" data-i18n="app.subtitle">Бесплатные видеозвонки в браузере</div>
         </header>
         <div class="cards">
