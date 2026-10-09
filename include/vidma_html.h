@@ -3245,7 +3245,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/livekit-client@2.9.7/dist/livekit-client.umd.min.js"></script>
+    <script src="/livekit-client.umd.min.js"></script>
     <script src="/app.js"></script>
 </body>
 </html>)html";
