@@ -176,7 +176,15 @@ let i18nTranslations = {};
 let i18nCurrent = I18N_DEFAULT;
 
 function i18nDetect() {
-    // 0. ?lang= в URL — высший приоритет (для SEO и шеринга)
+    // 0a. Path-prefix /ru/ /pl/ /uk/ и т.д. — SEO-friendly URL
+    try {
+        const pm = location.pathname.match(/^\/([a-z]{2})\/?$/);
+        if (pm && I18N_SUPPORTED.includes(pm[1])) {
+            try { localStorage.setItem('vidma-lang', pm[1]); } catch(e) {}
+            return pm[1];
+        }
+    } catch (e) {}
+    // 0b. ?lang= в URL — высший приоритет (для SEO и шеринга)
     try {
         const urlLang = new URLSearchParams(location.search).get('lang');
         if (urlLang) {

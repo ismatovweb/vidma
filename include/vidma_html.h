@@ -4,7 +4,7 @@
 #define VIDMA_HTML_H
 
 constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
-<html lang="ru">
+<html lang="{{LANG}}">
 <head>
 
     
@@ -18,33 +18,33 @@ constexpr const char* VIDMA_HTML = R"html(<!DOCTYPE html>
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#121212">
     <link rel="manifest" href="/manifest.json">
-    <title>Vidma — Free Video Calls Without Registration</title>
-    <meta name="description" content="Vidma is a free browser-based video calling service. Create a room in seconds, invite friends — no registration, no downloads, works on any device.">
+    <title>{{TITLE}}</title>
+    <meta name="description" content="{{DESCRIPTION}}">
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
     <link rel="alternate" hreflang="x-default" href="https://vidma.online/">
-    <link rel="alternate" hreflang="en" href="https://vidma.online/?lang=en">
-    <link rel="alternate" hreflang="ru" href="https://vidma.online/?lang=ru">
-    <link rel="alternate" hreflang="es" href="https://vidma.online/?lang=es">
-    <link rel="alternate" hreflang="de" href="https://vidma.online/?lang=de">
-    <link rel="alternate" hreflang="fr" href="https://vidma.online/?lang=fr">
-    <link rel="alternate" hreflang="zh" href="https://vidma.online/?lang=zh">
-    <link rel="alternate" hreflang="ja" href="https://vidma.online/?lang=ja">
-    <link rel="alternate" hreflang="pt" href="https://vidma.online/?lang=pt">
-    <link rel="alternate" hreflang="pl" href="https://vidma.online/?lang=pl">
-    <link rel="alternate" hreflang="uk" href="https://vidma.online/?lang=uk">
+    <link rel="alternate" hreflang="en" href="https://vidma.online/">
+    <link rel="alternate" hreflang="ru" href="https://vidma.online/ru/">
+    <link rel="alternate" hreflang="es" href="https://vidma.online/es/">
+    <link rel="alternate" hreflang="de" href="https://vidma.online/de/">
+    <link rel="alternate" hreflang="fr" href="https://vidma.online/fr/">
+    <link rel="alternate" hreflang="zh" href="https://vidma.online/zh/">
+    <link rel="alternate" hreflang="ja" href="https://vidma.online/ja/">
+    <link rel="alternate" hreflang="pt" href="https://vidma.online/pt/">
+    <link rel="alternate" hreflang="pl" href="https://vidma.online/pl/">
+    <link rel="alternate" hreflang="uk" href="https://vidma.online/uk/">
     <meta name="keywords" content="видеозвонки, видеоконференции, бесплатные звонки, без регистрации, созвон, видеосвязь, комната, WebRTC">
-    <link rel="canonical" href="https://vidma.online/">
+    <link rel="canonical" href="{{CANONICAL}}">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="https://vidma.online/">
-    <meta property="og:title" content="Vidma — Free Video Calls Without Registration">
-    <meta property="og:description" content="Join a video call in one click. No registration, end-to-end encrypted, works in your browser.">
+    <meta property="og:url" content="{{CANONICAL}}">
+    <meta property="og:title" content="{{TITLE}}">
+    <meta property="og:description" content="{{DESCRIPTION}}">
     <meta property="og:image" content="https://vidma.online/og-image.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta property="og:site_name" content="Vidma">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="Vidma — Free Video Calls Without Registration">
-    <meta name="twitter:description" content="Join a video call in one click. No registration, end-to-end encrypted, works in your browser.">
+    <meta name="twitter:title" content="{{TITLE}}">
+    <meta name="twitter:description" content="{{DESCRIPTION}}">
     <meta name="twitter:image" content="https://vidma.online/og-image.png">
     
     
@@ -2898,7 +2898,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
             </div>
             
             
-            <h1 class="hero-title" data-i18n="app.title">Vidma — Free Video Calls</h1>
+            <h1 class="hero-title" data-i18n="hero.title">{{H1}}</h1>
             <div class="subtitle" data-i18n="app.subtitle">Бесплатные видеозвонки в браузере</div>
         </header>
         <div class="cards">

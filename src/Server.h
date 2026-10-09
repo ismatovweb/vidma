@@ -352,9 +352,107 @@ private:
         return isAllowedOrigin(it->second);
     }
 
+    // ---- Localized landing metadata ----
+    struct LangMeta {
+        const char* code;
+        const char* title;
+        const char* description;
+        const char* h1;
+    };
+
+    static const LangMeta* findLangMeta(const std::string& lang) {
+        static const LangMeta metas[] = {
+            {"en", "Vidma — Free Video Calls Without Registration",
+                   "Vidma is a free browser-based video calling service. Create a room in seconds, invite friends — no registration, no downloads, works on any device.",
+                   "Video calls in one click"},
+            {"ru", "Vidma — Бесплатные видеозвонки без регистрации",
+                   "Vidma — бесплатные видеозвонки в браузере. Создайте комнату за секунды, пригласите друзей — без регистрации и установки, работает на любом устройстве.",
+                   "Видеозвонки в один клик"},
+            {"es", "Vidma — Videollamadas gratis sin registro",
+                   "Vidma es un servicio gratuito de videollamadas en el navegador. Crea una sala en segundos, invita a amigos — sin registro ni descargas.",
+                   "Videollamadas en un clic"},
+            {"de", "Vidma — Kostenlose Videoanrufe ohne Registrierung",
+                   "Vidma ist ein kostenloser Videoanrufdienst im Browser. Erstelle in Sekunden einen Raum, lade Freunde ein — ohne Registrierung.",
+                   "Videoanrufe mit einem Klick"},
+            {"fr", "Vidma — Appels vidéo gratuits sans inscription",
+                   "Vidma est un service gratuit d'appels vidéo dans le navigateur. Créez une salle en quelques secondes, invitez vos amis — sans inscription.",
+                   "Appels vidéo en un clic"},
+            {"zh", "Vidma — 免费视频通话，无需注册",
+                   "Vidma 是浏览器中的免费视频通话服务。几秒钟即可创建房间，邀请朋友 — 无需注册，无需下载。",
+                   "一键视频通话"},
+            {"ja", "Vidma — 登録不要の無料ビデオ通話",
+                   "Vidma はブラウザで使える無料のビデオ通話サービスです。数秒でルームを作成し、友達を招待できます — 登録不要。",
+                   "ワンクリックでビデオ通話"},
+            {"pt", "Vidma — Chamadas de vídeo grátis sem registro",
+                   "Vidma é um serviço gratuito de chamadas de vídeo no navegador. Crie uma sala em segundos, convide amigos — sem registro.",
+                   "Chamadas de vídeo em um clique"},
+            {"pl", "Vidma — Darmowe wideorozmowy bez rejestracji",
+                   "Vidma to darmowy serwis wideorozmów w przeglądarce. Utwórz pokój w kilka sekund, zaproś znajomych — bez rejestracji i instalacji.",
+                   "Wideorozmowy jednym kliknięciem"},
+            {"uk", "Vidma — Безкоштовні відеодзвінки без реєстрації",
+                   "Vidma — безкоштовний сервіс відеодзвонків у браузері. Створіть кімнату за секунди, запросіть друзів — без реєстрації та встановлення.",
+                   "Відеодзвінки одним кліком"},
+            {nullptr, nullptr, nullptr, nullptr}
+        };
+        for (int i = 0; metas[i].code; ++i) {
+            if (lang == metas[i].code) return &metas[i];
+        }
+        return nullptr;
+    }
+
+    static std::string renderLanding(const std::string& lang) {
+        std::string html(VIDMA_HTML);
+        const LangMeta* m = findLangMeta(lang);
+        if (!m) m = findLangMeta("en");
+        if (!m) return html;
+        auto ra = [](std::string& s, const std::string& from, const std::string& to) {
+            if (from.empty()) return;
+            size_t pos = 0;
+            while ((pos = s.find(from, pos)) != std::string::npos) {
+                s.replace(pos, from.size(), to);
+                pos += to.size();
+            }
+        };
+        std::string canonical = (lang == "en")
+            ? std::string("https://vidma.online/")
+            : std::string("https://vidma.online/") + lang + "/";
+        ra(html, "{{LANG}}",        std::string(m->code));
+        ra(html, "{{TITLE}}",       std::string(m->title));
+        ra(html, "{{DESCRIPTION}}", std::string(m->description));
+        ra(html, "{{H1}}",          std::string(m->h1));
+        ra(html, "{{CANONICAL}}",   canonical);
+        return html;
+    }
+
     void setupHttpRoutes() {
-        httpServer_.Get("/", [](const httplib::Request&, httplib::Response& res) {
-            res.set_content(VIDMA_HTML, "text/html; charset=utf-8");
+        // Landing — English (default, x-default)
+        httpServer_.Get("/", [this](const httplib::Request&, httplib::Response& res) {
+            res.set_content(renderLanding("en"), "text/html; charset=utf-8");
+            res.set_header("Cache-Control", "public, max-age=300");
+        });
+
+        // Localized landing: /ru/ /pl/ /uk/ /es/ /de/ /fr/ /zh/ /ja/ /pt/
+        // /en → 301 / (no duplicate)
+        httpServer_.Get(R"(/([a-z]{2})/?)", [this](const httplib::Request& req, httplib::Response& res) {
+            std::string lang = req.matches[1].str();
+            std::string path = req.path;
+            if (lang == "en") {
+                res.status = 301;
+                res.set_header("Location", "/");
+                return;
+            }
+            if (!findLangMeta(lang)) {
+                res.status = 404;
+                res.set_content("Not found", "text/plain; charset=utf-8");
+                return;
+            }
+            if (path.empty() || path.back() != '/') {
+                res.status = 301;
+                res.set_header("Location", "/" + lang + "/");
+                return;
+            }
+            res.set_content(renderLanding(lang), "text/html; charset=utf-8");
+            res.set_header("Cache-Control", "public, max-age=300");
         });
 
         httpServer_.Get("/robots.txt", [](const httplib::Request&, httplib::Response& res) {
@@ -366,10 +464,19 @@ private:
         httpServer_.Get("/sitemap.xml", [](const httplib::Request&, httplib::Response& res) {
             std::string sitemap =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-                "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n"
-                "  <url><loc>https://vidma.online/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>\n"
-                "</urlset>";
+                "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">\n";
+            sitemap += "  <url><loc>https://vidma.online/</loc><lastmod>2026-10-09</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>\n";
+            static const char* langs[] = {"ru","es","de","fr","zh","ja","pt","pl","uk",nullptr};
+            for (int i = 0; langs[i]; ++i) {
+                sitemap += "  <url><loc>https://vidma.online/";
+                sitemap += langs[i];
+                sitemap += "/</loc><lastmod>2026-10-09</lastmod><changefreq>weekly</changefreq><priority>0.9</priority></url>\n";
+            }
+            sitemap += "  <url><loc>https://vidma.online/privacy</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>\n";
+            sitemap += "  <url><loc>https://vidma.online/terms</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>\n";
+            sitemap += "</urlset>";
             res.set_content(sitemap, "application/xml; charset=utf-8");
+            res.set_header("Cache-Control", "public, max-age=3600");
         });
 
         httpServer_.Get("/privacy", [](const httplib::Request&, httplib::Response& res) {
