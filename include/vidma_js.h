@@ -170,12 +170,24 @@ function resolveName(preferredName) {
 // =====================================================================
 // i18n — internationalization engine
 // =====================================================================
-const I18N_SUPPORTED = ['en', 'ru', 'es', 'de', 'fr', 'zh', 'ja', 'pt'];
+const I18N_SUPPORTED = ['en', 'ru', 'es', 'de', 'fr', 'zh', 'ja', 'pt', 'pl', 'uk'];
 const I18N_DEFAULT = 'en';
 let i18nTranslations = {};
 let i18nCurrent = I18N_DEFAULT;
 
 function i18nDetect() {
+    // 0. ?lang= в URL — высший приоритет (для SEO и шеринга)
+    try {
+        const urlLang = new URLSearchParams(location.search).get('lang');
+        if (urlLang) {
+            const short = String(urlLang).toLowerCase().split('-')[0];
+            if (I18N_SUPPORTED.includes(short)) {
+                // Сохраним в localStorage и запомним что пришло из URL
+                try { localStorage.setItem('vidma-lang', short); } catch(e) {}
+                return short;
+            }
+        }
+    } catch (e) {}
     // 1. localStorage
     try {
         const saved = localStorage.getItem('vidma-lang');
@@ -303,7 +315,9 @@ const LANG_META = {
     fr: { name: 'Français', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="8" height="16" fill="#002395"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ED2939"/></svg>' },
     zh: { name: '中文', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#DE2910"/><polygon points="4.5,2.5 5.6,5.6 2.6,3.4 6.4,3.4 3.4,5.6" fill="#FFDE00"/></svg>' },
     ja: { name: '日本語', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#fff"/><circle cx="12" cy="8" r="4.4" fill="#BC002D"/></svg>' },
-    pt: { name: 'Português', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg>' }
+    pt: { name: 'Português', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg>' },
+    pl: { name: 'Polski',      flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="8" fill="#fff"/><rect y="8" width="24" height="8" fill="#DC143C"/></svg>' },
+    uk: { name: 'Українська',  flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="8" fill="#0057B7"/><rect y="8" width="24" height="8" fill="#FFD700"/></svg>' }
 };
 
 
@@ -331,7 +345,9 @@ const VIDMA_LANG_META = {
     fr: { name: 'Français', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="8" height="16" fill="#002395"/><rect x="8" width="8" height="16" fill="#fff"/><rect x="16" width="8" height="16" fill="#ED2939"/></svg>' },
     zh: { name: '中文', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#DE2910"/><polygon points="4.5,2.5 5.6,5.6 2.6,3.4 6.4,3.4 3.4,5.6" fill="#FFDE00"/></svg>' },
     ja: { name: '日本語', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="16" fill="#fff"/><circle cx="12" cy="8" r="4.4" fill="#BC002D"/></svg>' },
-    pt: { name: 'Português', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg>' }
+    pt: { name: 'Português', flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="9.6" height="16" fill="#006600"/><rect x="9.6" width="14.4" height="16" fill="#FF0000"/><circle cx="9.6" cy="8" r="3.3" fill="#FFCC00" stroke="#fff" stroke-width="0.4"/></svg>' },
+    pl: { name: 'Polski',      flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="8" fill="#fff"/><rect y="8" width="24" height="8" fill="#DC143C"/></svg>' },
+    uk: { name: 'Українська',  flag: '<svg viewBox="0 0 24 16" preserveAspectRatio="none"><rect width="24" height="8" fill="#0057B7"/><rect y="8" width="24" height="8" fill="#FFD700"/></svg>' }
 };
 
 function vidmaToggleLang(e) {
