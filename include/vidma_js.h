@@ -2997,6 +2997,60 @@ if (!window.__devicesInterval) {
     }, 15000);
 }
 
+// ============================================================
+// Tooltips: переводятся на текущий язык
+// ============================================================
+function applyTooltips() {
+    try {
+        var nodes = document.querySelectorAll('[data-i18n-tooltip]');
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var key = el.getAttribute('data-i18n-tooltip');
+            if (!key) continue;
+            var val = (typeof i18nT === 'function') ? i18nT(key) : key;
+            el.setAttribute('data-tooltip', val);
+            // Нативный title не используем — убираем если был
+            el.removeAttribute('title');
+        }
+        // Кнопки в JS-конструкторах (fsBtn) — проставим сами
+        document.querySelectorAll('.fullscreen-btn').forEach(function(b) {
+            b.setAttribute('data-tooltip', (typeof i18nT === 'function') ? i18nT('tooltip.fullscreen') : 'Fullscreen');
+            b.removeAttribute('title');
+        });
+        console.log('[tooltip] applied to', nodes.length, 'elements');
+    } catch (e) { console.warn('[tooltip] failed:', e); }
+}
+window.applyTooltips = applyTooltips;
+
+// Первичный вызов
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ setTimeout(applyTooltips, 300); });
+} else {
+    setTimeout(applyTooltips, 300);
+}
+
+// Обёртка над i18nSetLang — применять tooltips после смены языка
+(function() {
+    var __wrapped = false;
+    function tryWrap() {
+        if (__wrapped) return;
+        if (typeof window.i18nSetLang === 'function' && !window.i18nSetLang.__tooltipsWrapped) {
+            var __orig = window.i18nSetLang;
+            window.i18nSetLang = function() {
+                var r = __orig.apply(this, arguments);
+                setTimeout(applyTooltips, 100);
+                return r;
+            };
+            window.i18nSetLang.__tooltipsWrapped = true;
+            __wrapped = true;
+            console.log('[tooltip] i18nSetLang wrapped');
+        }
+    }
+    tryWrap();
+    setTimeout(tryWrap, 500);
+    setTimeout(tryWrap, 2000);
+})();
+
 // ============ Emoji reactions ============
 var REACTIONS_TOPIC = 'vidma-reactions';
 var reactionsOpen = false;

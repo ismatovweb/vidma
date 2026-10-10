@@ -2881,6 +2881,90 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     width: 13px;
     height: 13px;
 }
+
+/* ============================================================
+   === Tooltips — всплывающие подсказки на кнопках ===
+   ============================================================ */
+[data-tooltip] { position: relative; }
+[data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 10px);
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    padding: 7px 12px;
+    background: rgba(20, 20, 30, 0.96);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: 0.01em;
+    border-radius: 8px;
+    white-space: nowrap;
+    max-width: 260px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 200;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+[data-tooltip]::before {
+    content: '';
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%) translateY(6px);
+    border: 6px solid transparent;
+    border-top-color: rgba(20, 20, 30, 0.96);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    z-index: 201;
+}
+[data-tooltip]:hover::after,
+[data-tooltip]:focus-visible::after {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+[data-tooltip]:hover::before,
+[data-tooltip]:focus-visible::before {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+/* Не показываем на тач-устройствах (нет hover) */
+@media (hover: none) {
+    [data-tooltip]::after,
+    [data-tooltip]::before { display: none !important; }
+}
+/* Внутри чата tooltip над кнопкой вниз */
+#chat-scroll-btn[data-tooltip]::after {
+    bottom: auto;
+    top: calc(100% + 10px);
+    transform: translateX(-50%) translateY(-6px);
+}
+#chat-scroll-btn[data-tooltip]:hover::after {
+    transform: translateX(-50%) translateY(0);
+}
+#chat-scroll-btn[data-tooltip]::before {
+    bottom: auto;
+    top: calc(100% + 4px);
+    border-top-color: transparent;
+    border-bottom-color: rgba(20, 20, 30, 0.96);
+    transform: translateX(-50%) translateY(-6px);
+}
+#chat-scroll-btn[data-tooltip]:hover::before {
+    transform: translateX(-50%) translateY(0);
+}
+
+/* Tooltip wrapper для nr-toggle (не ломает псевдоэлементы кнопки) */
+.nr-tooltip-wrap {
+    display: inline-flex;
+    align-items: center;
+}
+.nr-tooltip-wrap::after { /* tooltip как обычно */ }
 </style>
     <script type="application/ld+json">
 [
@@ -3171,7 +3255,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
             <div class="lobby-row">
                 <label data-i18n="lobby.mic">Microphone</label>
                 <select id="lobby-mic-select"></select>
-                <button class="tog on" id="lobby-mic-toggle" onclick="lobbyToggleMic()" title="Вкл/выкл микрофон">
+                <button class="tog on" id="lobby-mic-toggle" onclick="lobbyToggleMic()" data-i18n-tooltip="tooltip.mic">
                     <svg id="lobby-mic-svg-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                     <svg id="lobby-mic-svg-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                 </button>
@@ -3185,7 +3269,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
             <div class="lobby-row">
                 <label data-i18n="lobby.camera">Camera</label>
                 <select id="lobby-cam-select"></select>
-                <button class="tog on" id="lobby-cam-toggle" onclick="lobbyToggleCam()" title="Вкл/выкл камеру">
+                <button class="tog on" id="lobby-cam-toggle" onclick="lobbyToggleCam()" data-i18n-tooltip="tooltip.cam">
                     <svg id="lobby-cam-svg-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                     <svg id="lobby-cam-svg-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56"/></svg>
                 </button>
@@ -3202,7 +3286,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
                     <span data-i18n="noise.label">Шумоподавление AI</span>
                     <span class="nr-hint" id="nr-hint"></span>
                 </span>
-                <button class="nr-toggle" id="noise-toggle" onclick="toggleNoiseSuppression()" type="button"></button>
+                <span class="nr-tooltip-wrap" data-i18n-tooltip="tooltip.noise"><button class="nr-toggle" id="noise-toggle" onclick="toggleNoiseSuppression()" type="button"></button></span>
             </div>
         </div>
     </div>
@@ -3222,7 +3306,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
             </div>
             <div class="room-info-bar" id="room-info-bar">
                 <span data-i18n="call.room">Room</span><span class="room-code" id="current-room-code"></span>
-                <button class="share-btn" onclick="openInviteModal()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> <span data-i18n="invite.button">Invite</span></button>
+                <button class="share-btn" onclick="openInviteModal()" data-i18n-tooltip="tooltip.invite"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> <span data-i18n="invite.button">Invite</span></button>
             </div>
         </div>
         <div id="videos-container">
@@ -3242,7 +3326,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         <div id="chat-panel">
         <div id="chat-header">
             <span data-i18n="chat.title">Room chat</span>
-            <button class="close-chat" onclick="toggleChatPanel()" title="Закрыть">✕</button>
+            <button class="close-chat" onclick="toggleChatPanel()" data-i18n-tooltip="tooltip.close">✕</button>
         </div>
         <div id="chat-reactions-bar">
             <div class="chat-reactions-label" data-i18n="chat.quickReactions">Quick reactions</div>
@@ -3265,7 +3349,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         <div id="chat-messages">
             <div id="chat-empty">История чата видна только вам и хранится в этом браузере.</div>
         </div>
-        <button id="chat-scroll-btn" type="button" onclick="chatScrollToBottom()" aria-label="Scroll to bottom">
+        <button id="chat-scroll-btn" type="button" onclick="chatScrollToBottom()" aria-label="Scroll to bottom" data-i18n-tooltip="tooltip.scrollBottom">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -3273,7 +3357,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         </button>
         <form id="chat-form" onsubmit="handleChatSubmit(event)">
             <input type="text" id="chat-input" placeholder="Message..." data-i18n-placeholder="chat.placeholder" data-i18n-placeholder="chat.placeholder" maxlength="500" autocomplete="off">
-            <button type="submit" id="chat-send" aria-label="Send">
+            <button type="submit" id="chat-send" aria-label="Send" data-i18n-tooltip="tooltip.send">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M22 2L11 13"/>
                     <path d="M22 2L15 22l-4-9-9-4 20-7z"/>
@@ -3283,26 +3367,26 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     </div>
     
     <div class="controls">
-            <button class="control-btn" id="toggle-mic" onclick="toggleMic()">
+            <button class="control-btn" id="toggle-mic" onclick="toggleMic()" data-i18n-tooltip="tooltip.mic">
                 <svg id="mic-icon-on" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                 <svg id="mic-icon-off" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             </button>
-            <button class="control-btn" id="toggle-cam" onclick="toggleCam()">
+            <button class="control-btn" id="toggle-cam" onclick="toggleCam()" data-i18n-tooltip="tooltip.cam">
                 <svg id="cam-icon-on" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
                 <svg id="cam-icon-off" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;"><line x1="1" y1="1" x2="23" y2="23"/><path d="M21 21H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h3m3-3h6l2 3h4a2 2 0 0 1 2 2v9.34m-7.72-2.06a4 4 0 1 1-5.56-5.56"/></svg>
             </button>
-            <button class="control-btn screen-share" id="toggle-screen" onclick="toggleScreenShare()">
+            <button class="control-btn screen-share" id="toggle-screen" onclick="toggleScreenShare()" data-i18n-tooltip="tooltip.screen">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
             </button>
-            <button class="control-btn participants" id="toggle-participants" type="button" title="Settings">
+            <button class="control-btn participants" id="toggle-participants" type="button" data-i18n-tooltip="tooltip.participants">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                 <span class="badge" id="participants-count">1</span>
             </button>
-            <button class="control-btn chat" id="toggle-chat" onclick="toggleChatPanel()" title="Chat">
+            <button class="control-btn chat" id="toggle-chat" onclick="toggleChatPanel()" data-i18n-tooltip="tooltip.chat">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span class="badge" id="chat-badge">0</span>
             </button>
-            <button class="control-btn danger" onclick="leaveCall()">
+            <button class="control-btn danger" onclick="leaveCall()" data-i18n-tooltip="tooltip.leave">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
             </button>
         </div>
@@ -3311,7 +3395,7 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     <div id="participants-panel" role="dialog" aria-label="Participants">
         <div class="pp-header">
             <span data-i18n="participants.title">Participants</span>
-            <button class="pp-close" onclick="closeParticipantsPanel()" aria-label="Close">&times;</button>
+            <button class="pp-close" onclick="closeParticipantsPanel()" aria-label="Close" data-i18n-tooltip="tooltip.close">&times;</button>
         </div>
         <div id="participants-list"></div>
     </div>
