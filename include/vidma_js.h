@@ -842,6 +842,16 @@ async function startLobbyPreview() {
 
         await populateLobbyDevices();
         startAudioLevelMeter();
+
+        // Auto-apply VB если pref уже включён (иначе после F5 в лобби будет оригинал при ON-тумблере)
+        if (typeof __vbPref !== 'undefined' && __vbPref.enabled && lobbyState.camEnabled) {
+            try {
+                console.log('[vb] auto-apply on lobby open');
+                await vbApplyToLobbyPreview();
+            } catch (e) {
+                console.warn('[vb] auto-apply failed:', e);
+            }
+        }
     } catch (err) {
         console.warn('Lobby: getUserMedia failed', err);
         // Если пользователь отказал — просто показываем модалку выбора
@@ -1033,10 +1043,12 @@ async function lobbyToggleCam() {
 
 function cancelLobby() {
     stopAudioLevelMeter();
+    if (typeof vbStop === 'function') vbStop();
     if (lobbyState.stream) {
         lobbyState.stream.getTracks().forEach(t => t.stop());
         lobbyState.stream = null;
     }
+    lobbyState.originalVideoTrack = null;
     document.getElementById('lobby-screen').classList.remove('active');
     document.getElementById('main-screen').style.display = 'block';
     document.getElementById('lobby-video').srcObject = null;
@@ -1268,15 +1280,38 @@ async function connectToRoom(preStream) {
             } catch (e) { console.warn('publish audio failed', e); }
         }
 
-        // Двойная страховка через LiveKit API
+        // Синхронизация состояния: НЕ отключаем, если трек уже опубликован.
+        // Проблема была: при публикации через publishTrack(track, ...) LiveKit
+        // не всегда подхватывает enabled. Делаем через реальное состояние публикаций.
         try {
-            if (!lobbyState.camEnabled) {
+            const camPub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+            const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+
+            const camPublished = !!(camPub && camPub.track);
+            const micPublished = !!(micPub && micPub.track);
+            console.log('[connectToRoom] sync | cam: published=' + camPublished + ' want=' + lobbyState.camEnabled +
+                        ' | mic: published=' + micPublished + ' want=' + lobbyState.micEnabled);
+
+            // Camera: если хотим включённым, но не опубликован — включить
+            if (lobbyState.camEnabled && !camPublished) {
+                await room.localParticipant.setCameraEnabled(true);
+                console.log('[connectToRoom] force camera ON');
+            }
+            // Camera: если хотим выключенным, но опубликован — выключить
+            if (!lobbyState.camEnabled && camPublished) {
                 await room.localParticipant.setCameraEnabled(false);
+                console.log('[connectToRoom] force camera OFF');
             }
-            if (!lobbyState.micEnabled) {
+            // Mic: аналогично
+            if (lobbyState.micEnabled && !micPublished) {
+                await room.localParticipant.setMicrophoneEnabled(true);
+                console.log('[connectToRoom] force mic ON');
+            }
+            if (!lobbyState.micEnabled && micPublished) {
                 await room.localParticipant.setMicrophoneEnabled(false);
+                console.log('[connectToRoom] force mic OFF');
             }
-        } catch (e) { console.warn('state sync failed', e); }
+        } catch (e) { console.warn('[connectToRoom] state sync failed', e); }
 
         // Обновить кнопки в главном окне звонка
         const camOn = document.getElementById('cam-icon-on');
@@ -3334,7 +3369,7 @@ async function vbPrepareImage(url) {
 
 function vbSetMode(mode) {
     __vb.mode = mode;
-    console.log('[vb] mode =', mode);
+    
     if (mode === 'image' && !__vb.imageUrl) {
         __vb.imageUrl = VB_PRESETS[0].url;
     }
@@ -3345,7 +3380,7 @@ function vbSetMode(mode) {
 
 function vbSetBlur(amount) {
     __vb.blurAmount = Math.max(2, Math.min(30, parseInt(amount, 10) || 10));
-    console.log('[vb] blur =', __vb.blurAmount);
+    
 }
 
 function vbSetImage(url) {
@@ -3362,61 +3397,363 @@ function vbGetOutputTrack() {
 // Пресеты — встроенные SVG-градиенты (data URL, не качаем)
 const VB_PRESETS = [
     {
-        id: 'office',
+        id: 'vidma',
+        name: 'Vidma',
         url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
-            '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
-            '<stop offset="0" stop-color="#2a2a3e"/><stop offset="1" stop-color="#1a1a2a"/>' +
-            '</linearGradient></defs>' +
-            '<rect width="1280" height="720" fill="url(#g)"/>' +
-            '<rect x="100" y="200" width="200" height="300" fill="#3a3a55" rx="8"/>' +
-            '<rect x="980" y="180" width="200" height="350" fill="#3a3a55" rx="8"/>' +
-            '<rect x="120" y="240" width="160" height="20" fill="#a78bfa" opacity="0.4"/>' +
-            '<rect x="120" y="280" width="120" height="20" fill="#a78bfa" opacity="0.3"/>' +
-            '<rect x="1000" y="220" width="160" height="20" fill="#a78bfa" opacity="0.4"/>' +
-            '<circle cx="640" cy="100" r="60" fill="#7c3aed" opacity="0.3"/>' +
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">' +
+            '<defs>' +
+            '<linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">' +
+            '<stop offset="0" stop-color="#4c1d95"/><stop offset="0.4" stop-color="#7c3aed"/>' +
+            '<stop offset="0.7" stop-color="#a78bfa"/><stop offset="1" stop-color="#c4b5fd"/>' +
+            '</linearGradient>' +
+            '<radialGradient id="r1" cx="0.2" cy="0.3" r="0.6"><stop offset="0" stop-color="#a78bfa" stop-opacity="0.7"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/></radialGradient>' +
+            '<radialGradient id="r2" cx="0.85" cy="0.75" r="0.55"><stop offset="0" stop-color="#e9d5ff" stop-opacity="0.5"/><stop offset="1" stop-color="#e9d5ff" stop-opacity="0"/></radialGradient>' +
+            '<radialGradient id="r3" cx="0.5" cy="0.9" r="0.7"><stop offset="0" stop-color="#1e1b4b" stop-opacity="0.5"/><stop offset="1" stop-color="#1e1b4b" stop-opacity="0"/></radialGradient>' +
+            '<filter id="blur1"><feGaussianBlur stdDeviation="40"/></filter>' +
+            '</defs>' +
+            '<rect width="1280" height="720" fill="url(#g1)"/>' +
+            '<circle cx="200" cy="180" r="400" fill="url(#r1)" filter="url(#blur1)"/>' +
+            '<circle cx="1100" cy="550" r="380" fill="url(#r2)" filter="url(#blur1)"/>' +
+            '<circle cx="640" cy="680" r="500" fill="url(#r3)" filter="url(#blur1)"/>' +
+            '<g opacity="0.15" fill="#fff">' +
+            '<circle cx="300" cy="400" r="2"/><circle cx="800" cy="200" r="1.5"/>' +
+            '<circle cx="1000" cy="350" r="2"/><circle cx="500" cy="600" r="1.5"/>' +
+            '<circle cx="700" cy="120" r="1"/><circle cx="1150" cy="450" r="1.5"/>' +
+            '</g>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'ocean',
+        name: 'Океан',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">' +
+            '<defs>' +
+            '<linearGradient id="water" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#0ea5e9"/><stop offset="0.4" stop-color="#0369a1"/>' +
+            '<stop offset="0.8" stop-color="#082f49"/><stop offset="1" stop-color="#020617"/>' +
+            '</linearGradient>' +
+            '<radialGradient id="sun" cx="0.5" cy="0" r="0.5"><stop offset="0" stop-color="#fef3c7" stop-opacity="0.8"/><stop offset="1" stop-color="#fef3c7" stop-opacity="0"/></radialGradient>' +
+            '</defs>' +
+            '<rect width="1280" height="720" fill="url(#water)"/>' +
+            '<ellipse cx="640" cy="0" rx="700" ry="300" fill="url(#sun)"/>' +
+            '<g opacity="0.25" stroke="#e0f2fe" stroke-width="2" fill="none">' +
+            '<path d="M0,80 Q160,50 320,80 T640,80 T960,80 T1280,80"/>' +
+            '<path d="M0,140 Q160,110 320,140 T640,140 T960,140 T1280,140"/>' +
+            '<path d="M0,200 Q160,170 320,200 T640,200 T960,200 T1280,200"/>' +
+            '</g>' +
+            '<g fill="#0c4a6e" opacity="0.6">' +
+            '<ellipse cx="120" cy="700" rx="180" ry="60"/>' +
+            '<ellipse cx="400" cy="720" rx="240" ry="80"/>' +
+            '<ellipse cx="900" cy="700" rx="200" ry="70"/>' +
+            '<ellipse cx="1200" cy="720" rx="180" ry="60"/>' +
+            '</g>' +
+            '<g fill="#1e293b" opacity="0.85">' +
+            '<path d="M300,380 Q320,340 350,360 Q370,340 390,370 L380,400 Q340,410 300,400 Z"/>' +
+            '<polygon points="350,370 350,330 320,350 325,335 350,355"/>' +
+            '<path d="M850,260 Q875,215 910,240 Q935,215 960,255 L945,290 Q895,300 850,285 Z"/>' +
+            '<polygon points="905,250 905,205 870,225 875,210 905,235"/>' +
+            '</g>' +
+            '<g fill="#1e293b" opacity="0.7">' +
+            '<path d="M600,450 Q615,425 640,440 Q660,425 675,450 L665,470 Q635,478 600,465 Z"/>' +
+            '<polygon points="640,442 640,415 618,430 622,418 640,432"/>' +
+            '</g>' +
+            '<g fill="#fbbf24" opacity="0.7">' +
+            '<circle cx="200" cy="150" r="4"/><circle cx="230" cy="120" r="3"/>' +
+            '<circle cx="1050" cy="180" r="4"/><circle cx="1090" cy="140" r="3"/>' +
+            '<circle cx="500" cy="100" r="3"/>' +
+            '</g>' +
+            '<g fill="none" stroke="#e0f2fe" stroke-width="1.5" opacity="0.35">' +
+            '<circle cx="420" cy="520" r="8"/><circle cx="420" cy="490" r="5"/>' +
+            '<circle cx="440" cy="470" r="7"/>' +
+            '<circle cx="1000" cy="600" r="8"/><circle cx="1010" cy="565" r="6"/>' +
+            '</g>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'fire',
+        name: 'Огонь',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">' +
+            '<defs>' +
+            '<radialGradient id="fireBg" cx="0.5" cy="0.9" r="0.7">' +
+            '<stop offset="0" stop-color="#7c2d12"/><stop offset="0.5" stop-color="#450a0a"/>' +
+            '<stop offset="1" stop-color="#0c0505"/>' +
+            '</radialGradient>' +
+            '<linearGradient id="flame1" x1="0" y1="1" x2="0" y2="0">' +
+            '<stop offset="0" stop-color="#fbbf24"/><stop offset="0.4" stop-color="#f97316"/>' +
+            '<stop offset="0.8" stop-color="#dc2626"/><stop offset="1" stop-color="#dc2626" stop-opacity="0"/>' +
+            '</linearGradient>' +
+            '<linearGradient id="flame2" x1="0" y1="1" x2="0" y2="0">' +
+            '<stop offset="0" stop-color="#fef3c7"/><stop offset="0.3" stop-color="#fbbf24"/>' +
+            '<stop offset="0.7" stop-color="#f97316"/><stop offset="1" stop-color="#ea580c" stop-opacity="0"/>' +
+            '</linearGradient>' +
+            '<filter id="fblur"><feGaussianBlur stdDeviation="6"/></filter>' +
+            '</defs>' +
+            '<rect width="1280" height="720" fill="url(#fireBg)"/>' +
+            '<g filter="url(#fblur)">' +
+            '<path fill="url(#flame1)" d="M180,720 Q150,600 220,500 Q200,450 240,380 Q260,440 280,500 Q340,600 320,720 Z"/>' +
+            '<path fill="url(#flame1)" d="M480,720 Q440,560 520,460 Q500,400 560,320 Q580,400 600,470 Q680,570 640,720 Z"/>' +
+            '<path fill="url(#flame1)" d="M800,720 Q780,580 840,470 Q830,420 880,350 Q900,420 920,490 Q980,600 940,720 Z"/>' +
+            '<path fill="url(#flame1)" d="M1100,720 Q1080,620 1140,520 Q1130,480 1180,410 Q1200,480 1210,540 Q1260,640 1240,720 Z"/>' +
+            '</g>' +
+            '<g filter="url(#fblur)">' +
+            '<path fill="url(#flame2)" d="M560,720 Q540,610 580,530 Q570,490 600,440 Q620,490 630,540 Q680,620 660,720 Z"/>' +
+            '<path fill="url(#flame2)" d="M880,720 Q860,630 900,560 Q890,530 920,490 Q940,530 950,570 Q990,640 970,720 Z"/>' +
+            '</g>' +
+            '<g fill="#fbbf24" opacity="0.5">' +
+            '<circle cx="300" cy="300" r="2"/><circle cx="500" cy="200" r="1.5"/>' +
+            '<circle cx="700" cy="250" r="2"/><circle cx="1000" cy="180" r="1.5"/>' +
+            '<circle cx="400" cy="400" r="2"/><circle cx="850" cy="350" r="1.5"/>' +
+            '<circle cx="1150" cy="280" r="2"/><circle cx="150" cy="450" r="1.5"/>' +
+            '</g>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'forest',
+        name: 'Лес',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">' +
+            '<defs>' +
+            '<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#fef3c7"/><stop offset="0.3" stop-color="#fed7aa"/>' +
+            '<stop offset="0.6" stop-color="#fcd34d"/><stop offset="1" stop-color="#86efac"/>' +
+            '</linearGradient>' +
+            '<radialGradient id="sun2" cx="0.75" cy="0.35" r="0.3">' +
+            '<stop offset="0" stop-color="#fff7ed" stop-opacity="1"/>' +
+            '<stop offset="0.5" stop-color="#fef3c7" stop-opacity="0.6"/>' +
+            '<stop offset="1" stop-color="#fef3c7" stop-opacity="0"/>' +
+            '</radialGradient>' +
+            '</defs>' +
+            '<rect width="1280" height="720" fill="url(#sky)"/>' +
+            '<circle cx="960" cy="250" r="240" fill="url(#sun2)"/>' +
+            '<circle cx="960" cy="250" r="70" fill="#fffbeb" opacity="0.9"/>' +
+            '<g fill="#166534" opacity="0.4">' +
+            '<path d="M80,720 L180,400 L280,720 Z"/>' +
+            '<path d="M340,720 L440,380 L540,720 Z"/>' +
+            '<path d="M760,720 L860,420 L960,720 Z"/>' +
+            '<path d="M1000,720 L1100,360 L1200,720 Z"/>' +
+            '</g>' +
+            '<g fill="#14532d" opacity="0.75">' +
+            '<path d="M-40,720 L80,320 L200,720 Z"/>' +
+            '<path d="M220,720 L340,280 L460,720 Z"/>' +
+            '<path d="M520,720 L640,340 L760,720 Z"/>' +
+            '<path d="M820,720 L940,300 L1060,720 Z"/>' +
+            '<path d="M1120,720 L1240,360 L1360,720 Z"/>' +
+            '</g>' +
+            '<g fill="#052e16">' +
+            '<path d="M140,720 L260,180 L380,720 Z"/>' +
+            '<path d="M420,720 L540,220 L660,720 Z"/>' +
+            '<path d="M700,720 L820,200 L940,720 Z"/>' +
+            '<path d="M980,720 L1100,240 L1220,720 Z"/>' +
+            '</g>' +
+            '<rect y="640" width="1280" height="80" fill="#052e16" opacity="0.7"/>' +
+            '<g fill="#fef3c7" opacity="0.5">' +
+            '<circle cx="300" cy="150" r="2"/><circle cx="500" cy="100" r="1.5"/>' +
+            '<circle cx="700" cy="180" r="2"/><circle cx="1100" cy="120" r="1.5"/>' +
+            '</g>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'carpet',
+        name: 'Ковёр',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">' +
+            '<defs>' +
+            '<pattern id="border" x="0" y="0" width="40" height="40" patternUnits="userSpaceOnUse">' +
+            '<rect width="40" height="40" fill="#7f1d1d"/>' +
+            '<path d="M0,20 L20,0 L40,20 L20,40 Z" fill="#b91c1c"/>' +
+            '<path d="M10,20 L20,10 L30,20 L20,30 Z" fill="#fbbf24"/>' +
+            '<circle cx="20" cy="20" r="3" fill="#7f1d1d"/>' +
+            '</pattern>' +
+            '<pattern id="inner" x="0" y="0" width="160" height="160" patternUnits="userSpaceOnUse">' +
+            '<rect width="160" height="160" fill="#991b1b"/>' +
+            '<path d="M80,10 L150,80 L80,150 L10,80 Z" fill="#7f1d1d"/>' +
+            '<path d="M80,25 L135,80 L80,135 L25,80 Z" fill="#fbbf24"/>' +
+            '<path d="M80,45 L115,80 L80,115 L45,80 Z" fill="#991b1b"/>' +
+            '<path d="M80,60 L100,80 L80,100 L60,80 Z" fill="#fbbf24"/>' +
+            '<circle cx="80" cy="80" r="6" fill="#7f1d1d"/>' +
+            '<path d="M0,0 L20,0 L0,20 Z" fill="#fbbf24"/>' +
+            '<path d="M160,0 L160,20 L140,0 Z" fill="#fbbf24"/>' +
+            '<path d="M0,160 L20,160 L0,140 Z" fill="#fbbf24"/>' +
+            '<path d="M160,160 L140,160 L160,140 Z" fill="#fbbf24"/>' +
+            '</pattern>' +
+            '</defs>' +
+            '<rect width="1280" height="720" fill="#7f1d1d"/>' +
+            '<rect x="40" y="40" width="1200" height="640" fill="url(#border)"/>' +
+            '<rect x="80" y="80" width="1120" height="560" fill="url(#inner)"/>' +
+            '<rect x="80" y="80" width="1120" height="560" fill="none" stroke="#7f1d1d" stroke-width="6"/>' +
+            '<rect x="100" y="100" width="1080" height="520" fill="none" stroke="#fbbf24" stroke-width="3"/>' +
             '</svg>'
         )
     },
     {
         id: 'library',
+        name: 'Библиотека',
         url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
-            '<rect width="1280" height="720" fill="#3d2817"/>' +
-            '<rect x="0" y="500" width="1280" height="220" fill="#2a1a0f"/>' +
-            '<rect x="60" y="100" width="80" height="400" fill="#8b5cf6"/>' +
-            '<rect x="150" y="120" width="60" height="380" fill="#ec4899"/>' +
-            '<rect x="220" y="100" width="80" height="400" fill="#f59e0b"/>' +
-            '<rect x="310" y="140" width="70" height="360" fill="#06b6d4"/>' +
-            '<rect x="400" y="110" width="60" height="390" fill="#84cc16"/>' +
-            '<rect x="850" y="100" width="80" height="400" fill="#8b5cf6"/>' +
-            '<rect x="940" y="130" width="60" height="370" fill="#f43f5e"/>' +
-            '<rect x="1010" y="100" width="80" height="400" fill="#f59e0b"/>' +
-            '</svg>'
-        )
-    },
-    {
-        id: 'nature',
-        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
-            '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">' +
-            '<stop offset="0" stop-color="#87ceeb"/><stop offset="1" stop-color="#b0e0e6"/>' +
-            '</linearGradient></defs>' +
-            '<rect width="1280" height="720" fill="url(#sky)"/>' +
-            '<circle cx="1100" cy="120" r="80" fill="#fff9c4" opacity="0.9"/>' +
-            '<path d="M0 400 L150 250 L300 380 L450 220 L600 400 L750 280 L900 420 L1050 320 L1280 450 L1280 720 L0 720 Z" fill="#2d5a3d"/>' +
-            '<path d="M0 500 L200 400 L400 480 L600 380 L800 500 L1000 420 L1280 520 L1280 720 L0 720 Z" fill="#1e4d2b"/>' +
-            '</svg>'
-        )
-    },
-    {
-        id: 'gradient',
-        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
-            '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
-            '<stop offset="0" stop-color="#667eea"/><stop offset="1" stop-color="#764ba2"/>' +
-            '</linearGradient></defs>' +
-            '<rect width="1280" height="720" fill="url(#g)"/>' +
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">' +
+            '<defs>' +
+            '<linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#3d2817"/><stop offset="1" stop-color="#1f1408"/>' +
+            '</linearGradient>' +
+            '<radialGradient id="lamp" cx="0.5" cy="0" r="0.6">' +
+            '<stop offset="0" stop-color="#fef3c7" stop-opacity="0.35"/>' +
+            '<stop offset="1" stop-color="#fef3c7" stop-opacity="0"/>' +
+            '</radialGradient>' +
+            '</defs>' +
+            '<rect width="1280" height="720" fill="url(#wall)"/>' +
+            '<ellipse cx="640" cy="80" rx="500" ry="240" fill="url(#lamp)"/>' +
+            '<rect x="80" y="180" width="1120" height="14" fill="#5c3d1f"/>' +
+            '<rect x="80" y="360" width="1120" height="14" fill="#5c3d1f"/>' +
+            '<rect x="80" y="540" width="1120" height="14" fill="#5c3d1f"/>' +
+            '<g>' +
+            '<rect x="100" y="60" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="124" y="70" width="20" height="110" fill="#1e3a8a"/>' +
+            '<rect x="146" y="55" width="24" height="125" fill="#166534"/>' +
+            '<rect x="172" y="80" width="18" height="100" fill="#7c2d12"/>' +
+            '<rect x="192" y="65" width="22" height="115" fill="#831843"/>' +
+            '<rect x="216" y="50" width="20" height="130" fill="#1e40af"/>' +
+            '<rect x="238" y="75" width="22" height="105" fill="#a16207"/>' +
+            '<rect x="262" y="60" width="20" height="120" fill="#7c2d12"/>' +
+            '<rect x="284" y="55" width="24" height="125" fill="#0f766e"/>' +
+            '<rect x="310" y="70" width="20" height="110" fill="#831843"/>' +
+            '<rect x="332" y="50" width="22" height="130" fill="#1e3a8a"/>' +
+            '<rect x="356" y="65" width="22" height="115" fill="#7c2d12"/>' +
+            '<rect x="380" y="55" width="20" height="125" fill="#166534"/>' +
+            '<rect x="402" y="70" width="22" height="110" fill="#a16207"/>' +
+            '<rect x="426" y="60" width="22" height="120" fill="#831843"/>' +
+            '<rect x="450" y="50" width="20" height="130" fill="#1e40af"/>' +
+            '<rect x="472" y="65" width="22" height="115" fill="#7c2d12"/>' +
+            '<rect x="496" y="55" width="24" height="125" fill="#0f766e"/>' +
+            '<rect x="522" y="70" width="20" height="110" fill="#1e3a8a"/>' +
+            '<rect x="544" y="50" width="22" height="130" fill="#831843"/>' +
+            '<rect x="568" y="60" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="592" y="65" width="20" height="115" fill="#166534"/>' +
+            '<rect x="614" y="55" width="22" height="125" fill="#a16207"/>' +
+            '<rect x="638" y="70" width="22" height="110" fill="#1e40af"/>' +
+            '<rect x="662" y="50" width="20" height="130" fill="#7c2d12"/>' +
+            '<rect x="684" y="65" width="24" height="115" fill="#831843"/>' +
+            '<rect x="710" y="60" width="20" height="120" fill="#0f766e"/>' +
+            '<rect x="732" y="55" width="22" height="125" fill="#7c2d12"/>' +
+            '<rect x="756" y="70" width="22" height="110" fill="#1e3a8a"/>' +
+            '<rect x="780" y="50" width="20" height="130" fill="#166534"/>' +
+            '<rect x="802" y="65" width="24" height="115" fill="#831843"/>' +
+            '<rect x="828" y="60" width="22" height="120" fill="#a16207"/>' +
+            '<rect x="852" y="55" width="20" height="125" fill="#7c2d12"/>' +
+            '<rect x="874" y="70" width="22" height="110" fill="#1e40af"/>' +
+            '<rect x="898" y="50" width="22" height="130" fill="#0f766e"/>' +
+            '<rect x="922" y="65" width="20" height="115" fill="#7c2d12"/>' +
+            '<rect x="944" y="55" width="24" height="125" fill="#831843"/>' +
+            '<rect x="970" y="60" width="22" height="120" fill="#166534"/>' +
+            '<rect x="994" y="50" width="20" height="130" fill="#7c2d12"/>' +
+            '<rect x="1016" y="65" width="22" height="115" fill="#1e3a8a"/>' +
+            '<rect x="1040" y="55" width="22" height="125" fill="#a16207"/>' +
+            '<rect x="1064" y="70" width="20" height="110" fill="#831843"/>' +
+            '<rect x="1086" y="60" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="1110" y="50" width="24" height="130" fill="#0f766e"/>' +
+            '<rect x="1136" y="65" width="22" height="115" fill="#1e3a8a"/>' +
+            '<rect x="1160" y="55" width="20" height="125" fill="#831843"/>' +
+            '</g>' +
+            '<g opacity="0.6">' +
+            '<rect x="100" y="240" width="22" height="120" fill="#166534"/>' +
+            '<rect x="124" y="250" width="20" height="110" fill="#7c2d12"/>' +
+            '<rect x="146" y="235" width="24" height="125" fill="#1e3a8a"/>' +
+            '<rect x="172" y="260" width="18" height="100" fill="#831843"/>' +
+            '<rect x="192" y="245" width="22" height="115" fill="#a16207"/>' +
+            '<rect x="216" y="230" width="20" height="130" fill="#7c2d12"/>' +
+            '<rect x="238" y="255" width="22" height="105" fill="#0f766e"/>' +
+            '<rect x="262" y="240" width="20" height="120" fill="#1e40af"/>' +
+            '<rect x="284" y="235" width="24" height="125" fill="#831843"/>' +
+            '<rect x="310" y="250" width="20" height="110" fill="#7c2d12"/>' +
+            '<rect x="332" y="230" width="22" height="130" fill="#166534"/>' +
+            '<rect x="356" y="245" width="22" height="115" fill="#1e3a8a"/>' +
+            '<rect x="380" y="235" width="20" height="125" fill="#a16207"/>' +
+            '<rect x="402" y="250" width="22" height="110" fill="#831843"/>' +
+            '<rect x="426" y="240" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="450" y="230" width="20" height="130" fill="#0f766e"/>' +
+            '<rect x="472" y="245" width="22" height="115" fill="#1e40af"/>' +
+            '<rect x="496" y="235" width="24" height="125" fill="#7c2d12"/>' +
+            '<rect x="522" y="250" width="20" height="110" fill="#831843"/>' +
+            '<rect x="544" y="230" width="22" height="130" fill="#166534"/>' +
+            '<rect x="568" y="240" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="592" y="245" width="20" height="115" fill="#1e3a8a"/>' +
+            '<rect x="614" y="235" width="22" height="125" fill="#a16207"/>' +
+            '<rect x="638" y="250" width="22" height="110" fill="#831843"/>' +
+            '<rect x="662" y="230" width="20" height="130" fill="#7c2d12"/>' +
+            '<rect x="684" y="245" width="24" height="115" fill="#0f766e"/>' +
+            '<rect x="710" y="240" width="20" height="120" fill="#1e40af"/>' +
+            '<rect x="732" y="235" width="22" height="125" fill="#831843"/>' +
+            '<rect x="756" y="250" width="22" height="110" fill="#7c2d12"/>' +
+            '<rect x="780" y="230" width="20" height="130" fill="#166534"/>' +
+            '<rect x="802" y="245" width="24" height="115" fill="#1e3a8a"/>' +
+            '<rect x="828" y="240" width="22" height="120" fill="#a16207"/>' +
+            '<rect x="852" y="235" width="20" height="125" fill="#7c2d12"/>' +
+            '<rect x="874" y="250" width="22" height="110" fill="#831843"/>' +
+            '<rect x="898" y="230" width="22" height="130" fill="#0f766e"/>' +
+            '<rect x="922" y="245" width="20" height="115" fill="#1e40af"/>' +
+            '<rect x="944" y="235" width="24" height="125" fill="#7c2d12"/>' +
+            '<rect x="970" y="240" width="22" height="120" fill="#831843"/>' +
+            '<rect x="994" y="230" width="20" height="130" fill="#166534"/>' +
+            '<rect x="1016" y="245" width="22" height="115" fill="#a16207"/>' +
+            '<rect x="1040" y="235" width="22" height="125" fill="#1e3a8a"/>' +
+            '<rect x="1064" y="250" width="20" height="110" fill="#7c2d12"/>' +
+            '<rect x="1086" y="240" width="22" height="120" fill="#831843"/>' +
+            '<rect x="1110" y="230" width="24" height="130" fill="#0f766e"/>' +
+            '<rect x="1136" y="245" width="22" height="115" fill="#1e40af"/>' +
+            '<rect x="1160" y="235" width="20" height="125" fill="#7c2d12"/>' +
+            '</g>' +
+            '<g opacity="0.35">' +
+            '<rect x="100" y="420" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="124" y="430" width="20" height="110" fill="#166534"/>' +
+            '<rect x="146" y="415" width="24" height="125" fill="#1e3a8a"/>' +
+            '<rect x="172" y="440" width="18" height="100" fill="#a16207"/>' +
+            '<rect x="192" y="425" width="22" height="115" fill="#831843"/>' +
+            '<rect x="216" y="410" width="20" height="130" fill="#7c2d12"/>' +
+            '<rect x="238" y="435" width="22" height="105" fill="#0f766e"/>' +
+            '<rect x="262" y="420" width="20" height="120" fill="#1e40af"/>' +
+            '<rect x="284" y="415" width="24" height="125" fill="#7c2d12"/>' +
+            '<rect x="310" y="430" width="20" height="110" fill="#831843"/>' +
+            '<rect x="332" y="410" width="22" height="130" fill="#166534"/>' +
+            '<rect x="356" y="425" width="22" height="115" fill="#1e3a8a"/>' +
+            '<rect x="380" y="415" width="20" height="125" fill="#a16207"/>' +
+            '<rect x="402" y="430" width="22" height="110" fill="#831843"/>' +
+            '<rect x="426" y="420" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="450" y="410" width="20" height="130" fill="#0f766e"/>' +
+            '<rect x="472" y="425" width="22" height="115" fill="#1e40af"/>' +
+            '<rect x="496" y="415" width="24" height="125" fill="#831843"/>' +
+            '<rect x="522" y="430" width="20" height="110" fill="#7c2d12"/>' +
+            '<rect x="544" y="410" width="22" height="130" fill="#166534"/>' +
+            '<rect x="568" y="420" width="22" height="120" fill="#1e3a8a"/>' +
+            '<rect x="592" y="425" width="20" height="115" fill="#7c2d12"/>' +
+            '<rect x="614" y="415" width="22" height="125" fill="#a16207"/>' +
+            '<rect x="638" y="430" width="22" height="110" fill="#831843"/>' +
+            '<rect x="662" y="410" width="20" height="130" fill="#0f766e"/>' +
+            '<rect x="684" y="425" width="24" height="115" fill="#1e40af"/>' +
+            '<rect x="710" y="420" width="20" height="120" fill="#7c2d12"/>' +
+            '<rect x="732" y="415" width="22" height="125" fill="#831843"/>' +
+            '<rect x="756" y="430" width="22" height="110" fill="#166534"/>' +
+            '<rect x="780" y="410" width="20" height="130" fill="#1e3a8a"/>' +
+            '<rect x="802" y="425" width="24" height="115" fill="#a16207"/>' +
+            '<rect x="828" y="420" width="22" height="120" fill="#7c2d12"/>' +
+            '<rect x="852" y="415" width="20" height="125" fill="#831843"/>' +
+            '<rect x="874" y="430" width="22" height="110" fill="#0f766e"/>' +
+            '<rect x="898" y="410" width="22" height="130" fill="#1e40af"/>' +
+            '<rect x="922" y="425" width="20" height="115" fill="#7c2d12"/>' +
+            '<rect x="944" y="415" width="24" height="125" fill="#831843"/>' +
+            '<rect x="970" y="420" width="22" height="120" fill="#166534"/>' +
+            '<rect x="994" y="410" width="20" height="130" fill="#a16207"/>' +
+            '<rect x="1016" y="425" width="22" height="115" fill="#7c2d12"/>' +
+            '<rect x="1040" y="415" width="22" height="125" fill="#1e3a8a"/>' +
+            '<rect x="1064" y="430" width="20" height="110" fill="#831843"/>' +
+            '<rect x="1086" y="420" width="22" height="120" fill="#0f766e"/>' +
+            '<rect x="1110" y="410" width="24" height="130" fill="#1e40af"/>' +
+            '<rect x="1136" y="425" width="22" height="115" fill="#7c2d12"/>' +
+            '<rect x="1160" y="415" width="20" height="125" fill="#831843"/>' +
+            '</g>' +
+            '<rect y="700" width="1280" height="20" fill="#1f1408"/>' +
             '</svg>'
         )
     }
@@ -3434,6 +3771,290 @@ window.vbGetOutputTrack = vbGetOutputTrack;
 window.VB_PRESETS = VB_PRESETS;
 window.__vb = __vb;
 
+
+
+// ============================================================
+// Virtual Background UI (lobby + settings)
+// ============================================================
+const VB_PREF_KEY = 'vidma-vb-pref';
+const VB_PREF_DEFAULT = { enabled: false, mode: 'blur', blur: 10, presetIdx: 0, imageDataUrl: null };
+
+function vbLoadPref() {
+    try {
+        var raw = localStorage.getItem(VB_PREF_KEY);
+        if (!raw) return Object.assign({}, VB_PREF_DEFAULT);
+        var p = JSON.parse(raw);
+        return Object.assign({}, VB_PREF_DEFAULT, p);
+    } catch (e) { return Object.assign({}, VB_PREF_DEFAULT); }
+}
+function vbSavePref(p) {
+    try { localStorage.setItem(VB_PREF_KEY, JSON.stringify(p)); } catch (e) {}
+}
+
+let __vbPref = vbLoadPref();
+
+function vbToggleUI() {
+    if (!vbCheckSupport()) {
+        showToast(i18nT('vb.unsupported') || 'Виртуальный фон недоступен на этом устройстве');
+        return;
+    }
+    __vbPref.enabled = !__vbPref.enabled;
+    vbSavePref(__vbPref);
+    vbRefreshUI();
+    console.log('[vb] toggle -> enabled =', __vbPref.enabled);
+    // Если лобби открыто и есть stream — применяем сейчас
+    if (typeof lobbyState !== 'undefined' && lobbyState && lobbyState.stream && lobbyState.camEnabled) {
+        vbApplyToLobbyPreview();
+    } else {
+        console.log('[vb] lobby not ready, will auto-apply when stream available');
+    }
+}
+
+function vbModeUI(mode) {
+    __vbPref.mode = mode;
+    vbSavePref(__vbPref);
+    vbSetMode(mode);
+    vbRefreshUI();
+    if (__vbPref.mode === 'image') {
+        var preset = VB_PRESETS[__vbPref.presetIdx] || VB_PRESETS[0];
+        vbSetImage(__vbPref.imageDataUrl || preset.url);
+    }
+}
+
+function vbBlurUI(val) {
+    var v = parseInt(val, 10) || 10;
+    __vbPref.blur = v;
+    vbSavePref(__vbPref);
+    vbSetBlur(v);
+    var el = document.getElementById('vb-blur-value');
+    if (el) el.textContent = String(v);
+    var slider = document.getElementById('vb-blur-slider');
+    if (slider) {
+        var pct = ((v - 2) / 28) * 100;
+        slider.style.setProperty('--pct', pct.toFixed(2) + '%');
+    }
+}
+
+function vbPresetUI(idx) {
+    __vbPref.presetIdx = idx;
+    __vbPref.imageDataUrl = null;
+    __vbPref.mode = 'image';
+    vbSavePref(__vbPref);
+    var preset = VB_PRESETS[idx];
+    if (preset) vbSetImage(preset.url);
+    vbRefreshUI();
+}
+
+function vbUploadUI(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        __vbPref.imageDataUrl = e.target.result;
+        __vbPref.mode = 'image';
+        vbSavePref(__vbPref);
+        vbSetImage(e.target.result);
+        vbRefreshUI();
+        console.log('[vb] custom image uploaded, size=', e.target.result.length);
+    };
+    reader.readAsDataURL(file);
+}
+
+function vbRenderPresets() {
+    var container = document.getElementById('vb-presets');
+    if (!container) return;
+    var html = '';
+    for (var i = 0; i < VB_PRESETS.length; i++) {
+        var p = VB_PRESETS[i];
+        var active = (i === __vbPref.presetIdx && !__vbPref.imageDataUrl) ? ' active' : '';
+        html += '<div class="vb-preset' + active + '" data-idx="' + i + '" style="background-image:url(\'' + p.url + '\')" onclick="vbPresetUI(' + i + ')"></div>';
+    }
+    var uploadActive = __vbPref.imageDataUrl ? ' active' : '';
+    html += '<label class="vb-preset upload' + uploadActive + '">';
+    html += '<svg viewBox="0 0 24 24" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    html += '<span data-i18n="vb.upload">Своя</span>';
+    html += '<input type="file" accept="image/*" onchange="vbUploadUI(this.files[0])">';
+    html += '</label>';
+    container.innerHTML = html;
+}
+
+function vbRefreshUI() {
+    var toggle = document.getElementById('vb-toggle');
+    var panel = document.getElementById('vb-panel');
+    var hint = document.getElementById('vb-hint');
+    var blurRow = document.getElementById('vb-blur-row');
+    var slider = document.getElementById('vb-blur-slider');
+    var sliderVal = document.getElementById('vb-blur-value');
+    var modesRow = document.querySelector('.vb-modes');
+    var presetsRow = document.getElementById('vb-presets');
+
+    var supported = vbCheckSupport();
+
+    // На мобильных blur не работает → принудительно image
+    if (VB_MOBILE && __vbPref.mode === 'blur') {
+        __vbPref.mode = 'image';
+        try { vbSavePref(__vbPref); } catch (e) {}
+        if (typeof vbSetMode === 'function') vbSetMode('image');
+    }
+
+    if (toggle) {
+        toggle.classList.toggle('on', __vbPref.enabled);
+        toggle.classList.toggle('disabled', !supported);
+    }
+    if (hint) {
+        hint.textContent = supported ? '' : '(' + (i18nT('vb.unsupported') || 'не поддерживается') + ')';
+    }
+    if (panel) {
+        panel.classList.toggle('open', __vbPref.enabled && supported);
+    }
+
+    // На мобильных скрываем переключатель режимов целиком (только картинки)
+    if (modesRow) {
+        modesRow.style.display = VB_MOBILE ? 'none' : '';
+    }
+
+    // Blur-слайдер показываем только когда режим blur (и не мобилка)
+    if (blurRow) {
+        blurRow.style.display = (!VB_MOBILE && __vbPref.mode === 'blur') ? '' : 'none';
+    }
+
+    // Пресеты картинок — только в режиме image
+    if (presetsRow) {
+        presetsRow.style.display = (__vbPref.mode === 'image') ? '' : 'none';
+    }
+    // Заголовок "Фоны" — тоже только в режиме image
+    var presetsTitle = document.querySelector('.vb-presets-title');
+    if (presetsTitle) {
+        presetsTitle.style.display = (__vbPref.mode === 'image') ? '' : 'none';
+    }
+
+    if (slider) {
+        slider.value = String(__vbPref.blur);
+        var pct0 = ((__vbPref.blur - 2) / 28) * 100;
+        slider.style.setProperty('--pct', pct0.toFixed(2) + '%');
+    }
+    if (sliderVal) sliderVal.textContent = String(__vbPref.blur);
+
+    // mode buttons
+    document.querySelectorAll('.vb-mode-btn').forEach(function(b) {
+        b.classList.toggle('active', b.dataset.mode === __vbPref.mode);
+    });
+
+    vbRenderPresets();
+}
+
+// Применение к лобби-preview: заменяем video-трек в lobbyState.stream
+async function vbApplyToLobbyPreview() {
+    console.log('[vb] applyToLobbyPreview: pref=', __vbPref.enabled, 'lobby=', !!lobbyState, 'stream=', !!(lobbyState && lobbyState.stream), 'cam=', lobbyState && lobbyState.camEnabled);
+    if (!lobbyState || !lobbyState.stream) { console.log('[vb] no lobby stream'); return; }
+    if (!lobbyState.camEnabled) { console.log('[vb] cam disabled in lobby'); return; }
+
+    try {
+        // Сохраняем оригинал при первом включении (важно: НЕ стопать его!)
+        var origTrack = lobbyState.originalVideoTrack;
+        if (!origTrack || origTrack.readyState !== 'live') {
+            origTrack = lobbyState.stream.getVideoTracks()[0];
+            if (!origTrack) return;
+            lobbyState.originalVideoTrack = origTrack;
+        }
+
+        var vid = document.getElementById('lobby-video');
+
+        if (!__vbPref.enabled) {
+            // ВЫКЛЮЧЕНИЕ — вернуть оригинал
+            if (__vb.enabled) {
+                vbStop();
+                // Убираем текущий (обработанный) трек, возвращаем оригинал
+                lobbyState.stream.getVideoTracks().forEach(function(t) {
+                    lobbyState.stream.removeTrack(t);   // remove, но НЕ stop
+                });
+                if (origTrack.readyState === 'live') {
+                    lobbyState.stream.addTrack(origTrack);
+                }
+                if (vid) { vid.srcObject = null; vid.srcObject = lobbyState.stream; vid.play().catch(function(){}); }
+                console.log('[vb] lobby preview restored to original');
+            }
+            return;
+        }
+
+        // ВКЛЮЧЕНИЕ
+        vbSetMode(__vbPref.mode);
+        vbSetBlur(__vbPref.blur);
+        if (__vbPref.mode === 'image') {
+            var preset = VB_PRESETS[__vbPref.presetIdx] || VB_PRESETS[0];
+            vbSetImage(__vbPref.imageDataUrl || preset.url);
+        }
+
+        // Если уже работает — просто меняем параметры
+        if (__vb.enabled && vbGetOutputTrack()) {
+            return;
+        }
+
+        var outStream = await vbStart(origTrack);
+        if (!outStream) return;
+        var outTrack = outStream.getVideoTracks()[0];
+        if (!outTrack) return;
+
+        // Убираем текущий трек из preview-стрима (не останавливая!)
+        lobbyState.stream.getVideoTracks().forEach(function(t) {
+            lobbyState.stream.removeTrack(t);   // только remove
+        });
+        lobbyState.stream.addTrack(outTrack);
+
+        if (vid) { vid.srcObject = null; vid.srcObject = lobbyState.stream; vid.play().catch(function(){}); }
+        console.log('[vb] applied to lobby preview (orig kept alive for MediaPipe)');
+    } catch (e) {
+        console.warn('[vb] apply to lobby failed:', e);
+    }
+}
+
+// Экспорт
+window.vbToggleUI = vbToggleUI;
+window.vbModeUI = vbModeUI;
+window.vbBlurUI = vbBlurUI;
+window.vbPresetUI = vbPresetUI;
+window.vbUploadUI = vbUploadUI;
+window.vbRefreshUI = vbRefreshUI;
+window.vbApplyToLobbyPreview = vbApplyToLobbyPreview;
+
+// Первичная инициализация UI
+(function() {
+    function init() {
+        if (!document.getElementById('vb-toggle')) {
+            setTimeout(init, 300);
+            return;
+        }
+        vbRefreshUI();
+        // Применяем mode/blur к модулю сразу
+        vbSetMode(__vbPref.mode);
+        vbSetBlur(__vbPref.blur);
+        console.log('[vb-ui] initialized, enabled =', __vbPref.enabled);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+
+
+
+// ============================================================
+// Virtual Background — mobile detection + UI improvements
+// ============================================================
+function vbIsMobile() {
+    try {
+        var ua = navigator.userAgent || '';
+        if (/iPhone|iPad|iPod|Android/i.test(ua)) return true;
+        if (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) return true;
+        return false;
+    } catch (e) { return false; }
+}
+
+const VB_MOBILE = vbIsMobile();
+
+// Оптимизация: throttle send() — не чаще 20 fps
+let __vbSendTs = 0;
+const __vbSendInterval = 1000 / 20;
 
 // ============ Emoji reactions ============
 var REACTIONS_TOPIC = 'vidma-reactions';
@@ -4245,8 +4866,13 @@ async function toggleCam() {
         if (typeof __setDesired === 'function') __setDesired('cam', !wasEnabled);
 
         if (wasEnabled) {
-            // ВЫКЛЮЧЕНИЕ: unpublishTrack(stop=true) — SDK сам остановит трек
-            // → камера отпускает устройство → LED гаснет
+            // ВЫКЛЮЧЕНИЕ
+            // 1. Если VB работает — остановить pipeline (освободит orig. track → LED off)
+            if (typeof __vbPref !== 'undefined' && __vbPref.enabled && __vb.enabled) {
+                console.log('[toggleCam] stopping VB before unpublish');
+                try { vbStop(); } catch (e) { console.warn('[toggleCam] vbStop err:', e); }
+            }
+            // 2. Снять публикацию (canvas track остановится)
             const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
             if (pub && pub.track) {
                 try {
@@ -4257,15 +4883,44 @@ async function toggleCam() {
                     await room.localParticipant.setCameraEnabled(false);
                 }
             }
-            // Отвязываем video element
             const lvOff = document.getElementById('local-video');
             if (lvOff) { try { lvOff.srcObject = null; } catch(e) {} }
         } else {
-            // ВКЛЮЧЕНИЕ: setCameraEnabled(true) создаёт свежий трек
+            // ВКЛЮЧЕНИЕ
             await room.localParticipant.setCameraEnabled(true);
-            await new Promise(r => setTimeout(r, 300));
+            await new Promise(r => setTimeout(r, 350));
+
             const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
             const lv = document.getElementById('local-video');
+
+            // Если VB был включён — обработать свежий трек от LiveKit через VB
+            if (pub && pub.track && typeof __vbPref !== 'undefined' && __vbPref.enabled) {
+                try {
+                    console.log('[toggleCam] reapplying VB to new camera track');
+                    if (__vb.enabled) { try { vbStop(); } catch (e) {} }
+                    const origMst = pub.track.mediaStreamTrack;
+                    if (origMst) {
+                        const vbStream = await vbStart(origMst);
+                        const vbTrack = vbStream ? vbStream.getVideoTracks()[0] : null;
+                        if (vbTrack && pub.track && typeof pub.track.replaceTrack === 'function') {
+                            await pub.track.replaceTrack(vbTrack);
+                            console.log('[toggleCam] ✓ VB track replaced in publication');
+                        } else if (vbTrack) {
+                            // Fallback: unpublish + republish
+                            try {
+                                await room.localParticipant.unpublishTrack(pub.track, false);
+                                await room.localParticipant.publishTrack(vbTrack, { source: Track.Source.Camera });
+                                console.log('[toggleCam] ✓ VB track republished');
+                            } catch (e) {
+                                console.warn('[toggleCam] VB republish failed:', e);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[toggleCam] VB reapply failed:', e);
+                }
+            }
+
             if (pub && pub.videoTrack && lv) {
                 pub.videoTrack.attach(lv);
                 try { await lv.play(); } catch(e) {}

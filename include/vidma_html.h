@@ -2965,6 +2965,270 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     align-items: center;
 }
 .nr-tooltip-wrap::after { /* tooltip как обычно */ }
+
+/* ============================================================
+   === Virtual Background UI v2 — polished ===
+   ============================================================ */
+/* .vb-row replaced with .lobby-noise-row structure */
+
+/* VB toggle uses .lobby-noise-row .nr-toggle styles — no custom CSS needed */
+
+/* Panel */
+.vb-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                padding 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+}
+.vb-panel.open {
+    max-height: 500px;
+    padding: 14px 0 4px;
+}
+
+/* Mode buttons */
+.vb-modes {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    padding: 4px;
+    background: #1f1f2e;
+    border-radius: 12px;
+}
+.vb-mode-btn {
+    flex: 1;
+    padding: 10px 14px;
+    background: transparent;
+    border: none;
+    border-radius: 9px;
+    color: #888;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+}
+.vb-mode-btn svg {
+    width: 15px; height: 15px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+.vb-mode-btn:hover { color: #ccc; background: rgba(255,255,255,0.04); }
+.vb-mode-btn.active {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35);
+}
+
+/* Blur slider — gradient-filled, styled thumb */
+.vb-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding: 12px 14px;
+    background: #1a1a24;
+    border-radius: 12px;
+    border: 1px solid #23233a;
+}
+.vb-slider-label {
+    color: #999;
+    font-size: 0.8rem;
+    font-weight: 500;
+    flex-shrink: 0;
+    letter-spacing: 0.01em;
+}
+.vb-slider-row input[type="range"] {
+    --pct: 28.5%;
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(
+        to right,
+        #8b5cf6 0%,
+        #a78bfa var(--pct),
+        #2a2a3a var(--pct),
+        #2a2a3a 100%
+    );
+    outline: none;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    transition: filter 0.15s;
+}
+.vb-slider-row input[type="range"]:hover {
+    filter: brightness(1.15);
+}
+.vb-slider-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    box-shadow:
+        0 2px 8px rgba(0,0,0,0.5),
+        0 0 0 2px #8b5cf6,
+        0 0 0 0 rgba(139,92,246,0.4);
+    transition: transform 0.15s, box-shadow 0.2s;
+    border: none;
+}
+.vb-slider-row input[type="range"]:hover::-webkit-slider-thumb {
+    transform: scale(1.12);
+}
+.vb-slider-row input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(1.05);
+    box-shadow:
+        0 2px 10px rgba(0,0,0,0.6),
+        0 0 0 2px #8b5cf6,
+        0 0 0 6px rgba(139,92,246,0.25);
+}
+.vb-slider-row input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    box-shadow:
+        0 2px 8px rgba(0,0,0,0.5),
+        0 0 0 2px #8b5cf6;
+    transition: transform 0.15s, box-shadow 0.2s;
+}
+.vb-slider-row input[type="range"]:hover::-moz-range-thumb {
+    transform: scale(1.12);
+}
+.vb-slider-row input[type="range"]::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: transparent;
+}
+.vb-slider-row input[type="range"]::-moz-range-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+}
+.vb-slider-value {
+    color: #a78bfa;
+    font-weight: 700;
+    font-size: 0.85rem;
+    min-width: 26px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    padding: 3px 8px;
+    background: rgba(139,92,246,0.12);
+    border-radius: 7px;
+    border: 1px solid rgba(139,92,246,0.2);
+}
+
+/* Presets title */
+.vb-presets-title {
+    color: #888;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin: 4px 0 10px;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+/* Presets */
+.vb-presets {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-top: 4px;
+}
+.vb-preset {
+    position: relative;
+    aspect-ratio: 16 / 10;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    overflow: hidden;
+    background-size: cover;
+    background-position: center;
+    background-color: #1f1f2e;
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.vb-preset::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+    pointer-events: none;
+}
+.vb-preset:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.4);
+}
+.vb-preset.active {
+    border-color: #8b5cf6;
+    box-shadow: 0 0 0 2px rgba(139,92,246,0.25), 0 4px 12px rgba(139,92,246,0.3);
+}
+.vb-preset.active::before {
+    content: '';
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+    background-size: 12px 12px;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 2;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.vb-preset.upload {
+    background: #1f1f2e;
+    border: 2px dashed #3a3a55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    color: #888;
+    font-size: 0.68rem;
+    font-weight: 500;
+    text-align: center;
+    padding: 4px;
+    transition: border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.vb-preset.upload:hover {
+    border-color: #8b5cf6;
+    color: #a78bfa;
+    transform: translateY(-2px);
+}
+.vb-preset.upload.active {
+    border-style: solid;
+    border-color: #8b5cf6;
+}
+.vb-preset.upload svg {
+    width: 22px; height: 22px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+}
+.vb-preset input[type="file"] { display: none; }
+
+@media (max-width: 480px) {
+    .vb-presets { grid-template-columns: repeat(3, 1fr); }
+    .vb-mode-btn { padding: 9px 10px; font-size: 0.78rem; }
+}
 </style>
     <script type="application/ld+json">
 [
@@ -3288,6 +3552,38 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
                 </span>
                 <span class="nr-tooltip-wrap" data-i18n-tooltip="tooltip.noise"><button class="nr-toggle" id="noise-toggle" onclick="toggleNoiseSuppression()" type="button"></button></span>
             </div>
+
+            <div class="lobby-noise-row">
+                <span class="nr-label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span data-i18n="vb.label">Виртуальный фон</span>
+                    <span class="nr-hint" id="vb-hint"></span>
+                </span>
+                <span class="nr-tooltip-wrap" data-i18n-tooltip="tooltip.vb">
+                    <button class="nr-toggle" id="vb-toggle" onclick="vbToggleUI()" type="button"></button>
+                </span>
+            </div>
+
+            <div class="vb-panel" id="vb-panel">
+                <div class="vb-modes">
+                    <button class="vb-mode-btn active" data-mode="blur" onclick="vbModeUI('blur')" type="button">
+                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18" fill="rgba(255,255,255,0.15)" stroke="none"/><path d="M12 3a9 9 0 0 1 0 18"/></svg>
+                        <span data-i18n="vb.mode.blur">Размытие</span>
+                    </button>
+                    <button class="vb-mode-btn" data-mode="image" onclick="vbModeUI('image')" type="button">
+                        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2.5"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path d="M21 15l-5-5L5 21"/></svg>
+                        <span data-i18n="vb.mode.image">Картинка</span>
+                    </button>
+                </div>
+                <div class="vb-slider-row" id="vb-blur-row">
+                    <span class="vb-slider-label" data-i18n="vb.blur">Размытие</span>
+                    <input type="range" id="vb-blur-slider" min="2" max="30" value="10" step="1" oninput="vbBlurUI(this.value)">
+                    <span class="vb-slider-value" id="vb-blur-value">10</span>
+                </div>
+                <div class="vb-presets-title" data-i18n="vb.presets">Фоны</div>
+                <div class="vb-presets" id="vb-presets"></div>
+            </div>
+
         </div>
     </div>
 
