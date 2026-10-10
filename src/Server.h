@@ -1,6 +1,8 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include <regex>
+#include <atomic>
 #include "RoomManager.h"
 #include <httplib.h>
 #include <json.hpp>
@@ -400,6 +402,79 @@ private:
         return nullptr;
     }
 
+    // ---- i18n: загрузка переводов из JSON ----
+    inline static std::unordered_map<std::string, std::unordered_map<std::string, std::string>> g_translations;
+    inline static std::shared_mutex g_translationsMutex;
+    inline static std::atomic<bool> g_translationsLoaded{false};
+
+    static void loadTranslations() {
+        std::unique_lock<std::shared_mutex> lock(g_translationsMutex);
+        if (g_translationsLoaded.load()) return;
+        try {
+            std::ifstream f("/var/www/vidma/translations.json");
+            if (!f.is_open()) {
+                std::cerr << "[i18n] cannot open /var/www/vidma/translations.json\n";
+                g_translationsLoaded.store(true);
+                return;
+            }
+            nlohmann::json j;
+            f >> j;
+            for (auto& item : j.items()) {
+                const std::string& lang = item.key();
+                if (!item.value().is_object()) continue;
+                for (auto& kv : item.value().items()) {
+                    if (kv.value().is_string()) {
+                        g_translations[lang][kv.key()] = kv.value().get<std::string>();
+                    }
+                }
+            }
+            std::cout << "[i18n] loaded " << g_translations.size() << " languages from translations.json\n";
+        } catch (const std::exception& e) {
+            std::cerr << "[i18n] load failed: " << e.what() << "\n";
+        }
+        g_translationsLoaded.store(true);
+    }
+
+    static std::string tr(const std::string& lang, const std::string& key) {
+        std::shared_lock<std::shared_mutex> lock(g_translationsMutex);
+        auto langIt = g_translations.find(lang);
+        if (langIt == g_translations.end()) return "";
+        auto keyIt = langIt->second.find(key);
+        if (keyIt == langIt->second.end()) return "";
+        return keyIt->second;
+    }
+
+    // Заменяет CONTENT в data-i18n="KEY">CONTENT< на перевод
+    static std::string replaceI18nContent(const std::string& html, const std::string& lang) {
+        static const std::regex re(R"HTMLRE(data-i18n="([^"]+)">([^<]*))HTMLRE");
+        std::string out;
+        out.reserve(html.size() + 1024);
+        size_t pos = 0;
+        auto begin = std::sregex_iterator(html.begin(), html.end(), re);
+        auto end = std::sregex_iterator();
+        for (auto it = begin; it != end; ++it) {
+            const std::smatch& m = *it;
+            size_t matchStart = m.position();
+            size_t matchLen = m[0].length();
+            size_t contentLen = m[2].length();
+            size_t contentStart = matchStart + matchLen - contentLen;
+
+            // Копируем до начала CONTENT (включительно data-i18n="KEY">)
+            out.append(html, pos, contentStart - pos);
+
+            std::string key = m[1].str();
+            std::string translated = tr(lang, key);
+            if (translated.empty()) {
+                out.append(m[2].str());
+            } else {
+                out.append(translated);
+            }
+            pos = matchStart + matchLen;
+        }
+        out.append(html, pos, std::string::npos);
+        return out;
+    }
+
     static std::string renderLanding(const std::string& lang) {
         std::string html(VIDMA_HTML);
         const LangMeta* m = findLangMeta(lang);
@@ -421,6 +496,10 @@ private:
         ra(html, "{{DESCRIPTION}}", std::string(m->description));
         ra(html, "{{H1}}",          std::string(m->h1));
         ra(html, "{{CANONICAL}}",   canonical);
+
+        // SSR: заменяем контент всех data-i18n элементов на переводы
+        loadTranslations();
+        html = replaceI18nContent(html, lang);
         return html;
     }
 
