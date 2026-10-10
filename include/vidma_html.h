@@ -3229,6 +3229,81 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     .vb-presets { grid-template-columns: repeat(3, 1fr); }
     .vb-mode-btn { padding: 9px 10px; font-size: 0.78rem; }
 }
+
+/* ============================================================
+   === Global scrollbar — тонкий фиолетовый на всех страницах ===
+   ============================================================ */
+html, body {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,92,246,0.35) transparent;
+    overflow-y: auto;
+}
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+html::-webkit-scrollbar-track,
+body::-webkit-scrollbar-track {
+    background: transparent;
+}
+html::-webkit-scrollbar-thumb,
+body::-webkit-scrollbar-thumb {
+    background: rgba(139,92,246,0.35);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.15s ease;
+}
+html::-webkit-scrollbar-thumb:hover,
+body::-webkit-scrollbar-thumb:hover {
+    background: rgba(139,92,246,0.65);
+    background-clip: padding-box;
+}
+html::-webkit-scrollbar-corner,
+body::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Универсальный скроллбар для всех overflow-контейнеров */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,92,246,0.35) transparent;
+}
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+    background: rgba(139,92,246,0.35);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+    background: rgba(139,92,246,0.65);
+    background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+/* Чат — немного тоньше */
+#chat-messages {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,92,246,0.4) transparent;
+}
+#chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+#chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(139,92,246,0.4);
+    border-radius: 3px;
+    border: none;
+}
 </style>
     <script type="application/ld+json">
 [

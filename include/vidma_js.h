@@ -1000,7 +1000,13 @@ async function lobbyToggleCam() {
     const vid = document.getElementById('lobby-video');
 
     if (!newState) {
-        // ВЫКЛЮЧАЕМ: stop() → LED гаснет полностью
+        // ВЫКЛЮЧАЕМ: централизованно стопим ВСЁ, связанное с камерой
+        if (typeof __vb !== 'undefined' && __vb.enabled) {
+            try { vbStop(); } catch(e) { console.warn('[lobby] vbStop err:', e); }
+        }
+        if (typeof __stopAllCameraTracks === 'function') {
+            __stopAllCameraTracks();
+        }
         lobbyState.stream.getVideoTracks().forEach(t => {
             try { t.stop(); } catch(e) {}
             try { lobbyState.stream.removeTrack(t); } catch(e) {}
@@ -1044,6 +1050,7 @@ async function lobbyToggleCam() {
 function cancelLobby() {
     stopAudioLevelMeter();
     if (typeof vbStop === 'function') vbStop();
+    if (typeof __stopAllCameraTracks === 'function') __stopAllCameraTracks();
     if (lobbyState.stream) {
         lobbyState.stream.getTracks().forEach(t => t.stop());
         lobbyState.stream = null;
@@ -2359,6 +2366,11 @@ function detachParticipant(identity) {
 }
 
 function leaveCall() {
+    // LED fix: перед выходом стопим все camera tracks
+    try {
+        if (typeof __stopAllCameraTracks === 'function') __stopAllCameraTracks();
+    } catch (e) {}
+
     if (room) {
         try { room.disconnect(); } catch (e) {}
         room = null;
@@ -4052,6 +4064,48 @@ function vbIsMobile() {
 
 const VB_MOBILE = vbIsMobile();
 
+// ============================================================
+// Centralized: остановить ВСЕ video-track'и, связанные с камерой
+// (canvas от VB, оригиналы, всё) — чтобы LED погас гарантированно
+// ============================================================
+function __stopAllCameraTracks() {
+    try {
+        // 1. Оригинал, который использовался для VB
+        if (typeof __vb !== 'undefined' && __vb.originalTrack && __vb.originalTrack.readyState === 'live') {
+            try { __vb.originalTrack.stop(); console.log('[led] stopped __vb.originalTrack'); } catch(e) {}
+        }
+        if (typeof __vb !== 'undefined') {
+            __vb.originalTrack = null;
+            __vb.originalStream = null;
+        }
+        // 2. Оригинал, сохранённый в лобби
+        if (typeof lobbyState !== 'undefined' && lobbyState.originalVideoTrack && lobbyState.originalVideoTrack.readyState === 'live') {
+            try { lobbyState.originalVideoTrack.stop(); console.log('[led] stopped lobbyState.originalVideoTrack'); } catch(e) {}
+            lobbyState.originalVideoTrack = null;
+        }
+        // 3. Все видео-треки из lobbyState.stream (включая canvas от VB)
+        if (typeof lobbyState !== 'undefined' && lobbyState.stream) {
+            var vts = lobbyState.stream.getVideoTracks();
+            for (var i = 0; i < vts.length; i++) {
+                try { vts[i].stop(); console.log('[led] stopped lobby video track', i); } catch(e) {}
+            }
+        }
+        // 4. Output track от VB
+        if (typeof __vb !== 'undefined' && __vb.outputStream) {
+            var ovt = __vb.outputStream.getVideoTracks();
+            for (var k = 0; k < ovt.length; k++) {
+                try { ovt[k].stop(); } catch(e) {}
+            }
+        }
+        // 5. Source video element
+        if (typeof __vb !== 'undefined' && __vb.sourceVideo) {
+            try { __vb.sourceVideo.pause(); } catch(e) {}
+            try { __vb.sourceVideo.srcObject = null; } catch(e) {}
+        }
+    } catch (e) { console.warn('[led] stopAll error:', e); }
+}
+window.__stopAllCameraTracks = __stopAllCameraTracks;
+
 // Оптимизация: throttle send() — не чаще 20 fps
 let __vbSendTs = 0;
 const __vbSendInterval = 1000 / 20;
@@ -4882,6 +4936,10 @@ async function toggleCam() {
                     console.warn('[toggleCam] unpublish failed, fallback setCameraEnabled(false):', e);
                     await room.localParticipant.setCameraEnabled(false);
                 }
+            }
+            // 3. Гарантированно стопим все camera tracks (LED гаснет точно)
+            if (typeof __stopAllCameraTracks === 'function') {
+                __stopAllCameraTracks();
             }
             const lvOff = document.getElementById('local-video');
             if (lvOff) { try { lvOff.srcObject = null; } catch(e) {} }
