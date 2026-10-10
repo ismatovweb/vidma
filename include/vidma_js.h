@@ -1895,6 +1895,14 @@ function getVolumeFor(id) {
     return 100;
 }
 
+// Уникальный ключ для audio-публикации: mic и screen-share audio не должны конфликтовать
+function __audioKey(identity, pub) {
+    var src = (pub && pub.source) || '';
+    if (src === 'screen_share_audio' || src === Track.Source.ScreenShareAudio) return identity + ':screen';
+    if (src === 'microphone' || src === Track.Source.Microphone) return identity + ':mic';
+    return identity + ':audio';
+}
+
 async function attachVolume(id, pub) {
     if (!pub || !pub.track) return;
     try {
@@ -1958,7 +1966,9 @@ async function attachVolume(id, pub) {
         const stream = (audioEl.srcObject instanceof MediaStream) ? audioEl.srcObject : new MediaStream([mst]);
         const source = ctx.createMediaStreamSource(stream);
         const gain = ctx.createGain();
-        const pct = getVolumeFor(id);
+        // Volume — по базовому identity (без суффикса), чтобы слайдер регулировал и mic, и screen
+        const baseId = String(id).split(':')[0];
+        const pct = getVolumeFor(baseId);
         gain.gain.value = pct / 100;
         source.connect(gain);
         gain.connect(ctx.destination);
@@ -1981,6 +1991,15 @@ async function attachVolume(id, pub) {
         console.warn('[volume] chain FAILED for', id.slice(0,6), ':', e && e.name, e && e.message);
         try { __volNodes.delete(id); } catch (_) {}
     }
+}
+
+function detachVolumeAll(identity) {
+    // Удаляем все audio-публикации этого участника (mic + screen + fallback)
+    detachVolume(identity + ':mic');
+    detachVolume(identity + ':screen');
+    detachVolume(identity + ':audio');
+    detachVolume(identity);
+    console.log('[volume] detached all audio for', String(identity).slice(0,6));
 }
 
 function detachVolume(id) {
@@ -2323,7 +2342,8 @@ function attachParticipant(participant) {
     participant.trackPublications.forEach(pub => {
         if (!pub.isSubscribed || !pub.track) return;
         if (pub.kind === 'audio') {
-            try { attachVolume(id, pub); } catch (e) { console.warn(e); }
+            var audioKey = __audioKey(id, pub);
+            try { attachVolume(audioKey, pub); } catch (e) { console.warn(e); }
             return;
         }
         if (pub.kind === 'video' && pub.source === Track.Source.ScreenShare && screenPanel) {
@@ -2350,7 +2370,11 @@ function attachParticipant(participant) {
 }
 
 function detachParticipant(identity) {
-    detachVolume(identity);
+    if (typeof detachVolumeAll === 'function') {
+        detachVolumeAll(identity);
+    } else {
+        detachVolume(identity);
+    }
     const camPanel = remotePanels.get(identity);
     if (camPanel) {
         stopSpeakerGlow(identity);
