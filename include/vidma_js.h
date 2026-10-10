@@ -3051,6 +3051,390 @@ if (document.readyState === 'loading') {
     setTimeout(tryWrap, 2000);
 })();
 
+
+// ============================================================
+// Virtual Backgrounds (MediaPipe Selfie Segmentation)
+// Локальная обработка в браузере, кадры не покидают устройство
+// ============================================================
+const __vb = {
+    supported: null,       // null | true | false
+    loaded: false,
+    busy: false,           // идёт send() в данный момент
+    initialized: false,    // MediaPipe сделал первый кадр
+    initResolve: null,
+    loading: false,
+    enabled: false,
+    mode: 'off',           // 'off' | 'blur' | 'image'
+    blurAmount: 10,
+    imageUrl: null,
+    segmentation: null,
+    sourceVideo: null,
+    bgCanvas: null,
+    canvas: null,
+    ctx: null,
+    outputStream: null,
+    originalStream: null,
+    originalTrack: null,
+    rafId: null,
+    lastFrameTime: 0,
+    fps: 0,
+    targetFps: 24,
+};
+
+function vbCheckSupport() {
+    if (__vb.supported !== null) return __vb.supported;
+    try {
+        var hasWGL2 = !!document.createElement('canvas').getContext('webgl2');
+        var hasSIMD = false;
+        try {
+            hasSIMD = WebAssembly.validate(new Uint8Array([
+                0,97,115,109,1,0,0,0,1,5,1,96,0,1,123,3,2,1,0,
+                10,10,1,8,0,65,0,253,15,253,98,11
+            ]));
+        } catch (e) {}
+        __vb.supported = hasWGL2 && hasSIMD;
+    } catch (e) { __vb.supported = false; }
+    console.log('[vb] support:', __vb.supported, '(WebGL2+SIMD)');
+    return __vb.supported;
+}
+
+async function vbLoad() {
+    if (__vb.loaded) return true;
+    if (__vb.loading) {
+        // ждём пока другая загрузка завершится
+        while (__vb.loading) await new Promise(r => setTimeout(r, 100));
+        return __vb.loaded;
+    }
+    if (!vbCheckSupport()) return false;
+    __vb.loading = true;
+    try {
+        await new Promise((resolve, reject) => {
+            if (window.SelfieSegmentation) { resolve(); return; }
+            var s = document.createElement('script');
+            s.src = '/mediapipe/selfie_segmentation.js';
+            s.onload = resolve;
+            s.onerror = () => reject(new Error('failed to load selfie_segmentation.js'));
+            document.head.appendChild(s);
+        });
+        __vb.segmentation = new SelfieSegmentation({
+            locateFile: (file) => '/mediapipe/' + file
+        });
+        __vb.segmentation.setOptions({
+            modelSelection: 1,   // 1 = landscape (быстрее, чуть хуже детализация)
+            selfieMode: false
+        });
+        __vb.segmentation.onResults(vbProcessFrame);
+        __vb.loaded = true;
+        console.log('[vb] mediapipe loaded');
+        return true;
+    } catch (e) {
+        console.warn('[vb] load failed:', e);
+        __vb.loaded = false;
+        return false;
+    } finally {
+        __vb.loading = false;
+    }
+}
+
+function vbProcessFrame(results) {
+    if (!__vb.ctx || !__vb.canvas) return;
+    if (!__vb.initialized) {
+        __vb.initialized = true;
+        if (__vb.initResolve) { __vb.initResolve(true); __vb.initResolve = null; }
+        console.log('[vb] first frame rendered — pipeline ready');
+    }
+    try {
+        var ctx = __vb.ctx;
+        var canvas = __vb.canvas;
+        var w = canvas.width, h = canvas.height;
+
+        ctx.save();
+        ctx.clearRect(0, 0, w, h);
+
+        // 1) Маска человека (белое — человек, чёрное — фон)
+        ctx.drawImage(results.segmentationMask, 0, 0, w, h);
+        // 2) Внутри маски — оригинальный кадр
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.drawImage(results.image, 0, 0, w, h);
+        // 3) Под всем этим — фон
+        ctx.globalCompositeOperation = 'destination-over';
+
+        if (__vb.mode === 'image' && __vb.bgCanvas) {
+            ctx.drawImage(__vb.bgCanvas, 0, 0, w, h);
+        } else {
+            // blur
+            ctx.filter = 'blur(' + __vb.blurAmount + 'px)';
+            ctx.drawImage(results.image, -20, -20, w + 40, h + 40);
+            ctx.filter = 'none';
+        }
+        ctx.restore();
+
+        // FPS
+        var now = performance.now();
+        if (__vb.lastFrameTime) {
+            var dt = now - __vb.lastFrameTime;
+            if (dt > 0) __vb.fps = Math.round(__vb.fps * 0.7 + (1000 / dt) * 0.3);
+        }
+        __vb.lastFrameTime = now;
+    } catch (e) {
+        console.warn('[vb] processFrame error:', e);
+    }
+}
+
+async function vbRenderLoop() {
+    if (!__vb.enabled) return;
+    var v = __vb.sourceVideo;
+    if (v && v.readyState >= 2 && __vb.segmentation && !__vb.busy) {
+        __vb.busy = true;
+        try {
+            await __vb.segmentation.send({ image: v });
+        } catch (e) {
+            console.warn('[vb] send err:', e);
+        } finally {
+            __vb.busy = false;
+        }
+    }
+    __vb.rafId = requestAnimationFrame(vbRenderLoop);
+}
+
+async function vbStart(inputTrack) {
+    if (!vbCheckSupport()) return null;
+    if (__vb.enabled && __vb.outputStream) return __vb.outputStream;
+
+    var ok = await vbLoad();
+    if (!ok) return null;
+
+    __vb.originalTrack = inputTrack;
+    __vb.originalStream = new MediaStream([inputTrack]);
+
+    // <video> с оригиналом
+    var v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.autoplay = true;
+    v.srcObject = __vb.originalStream;
+    v.style.display = 'none';
+    document.body.appendChild(v);
+    __vb.sourceVideo = v;
+
+    // Размеры из настроек трека
+    var s = inputTrack.getSettings ? inputTrack.getSettings() : {};
+    var w = s.width || 1280;
+    var h = s.height || 720;
+
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    __vb.canvas = canvas;
+    __vb.ctx = canvas.getContext('2d', { willReadFrequently: false });
+
+    // Для blur — отдельный canvas для размытия фона (не нужен — используем ctx.filter)
+    // Для image — заранее загрузим
+    if (__vb.mode === 'image' && __vb.imageUrl) {
+        await vbPrepareImage(__vb.imageUrl);
+    }
+
+    // Запускаем <video>
+    try { await v.play(); } catch (e) { console.warn('[vb] video play failed:', e); }
+
+    // Ждём первый кадр от камеры
+    await new Promise((resolve) => {
+        if (v.videoWidth > 0) return resolve();
+        var done = false;
+        var to = setTimeout(function() { if (!done) { done = true; resolve(); } }, 3000);
+        v.addEventListener('loadeddata', function() {
+            if (done) return; done = true; clearTimeout(to); resolve();
+        }, { once: true });
+    });
+    console.log('[vb] video frame ready', v.videoWidth, 'x', v.videoHeight);
+
+    // Инициализируем MediaPipe — await первого рендера
+    __vb.initialized = false;
+    var initPromise = new Promise(function(resolve) {
+        __vb.initResolve = resolve;
+        setTimeout(function() { if (!__vb.initialized) resolve(false); }, 10000);
+    });
+    try {
+        __vb.busy = true;
+        await __vb.segmentation.send({ image: v });
+    } catch (e) {
+        console.warn('[vb] init send failed:', e);
+    } finally {
+        __vb.busy = false;
+    }
+    var pipelineReady = await initPromise;
+    if (!pipelineReady) {
+        console.warn('[vb] pipeline failed to initialize');
+        vbStop();
+        return null;
+    }
+
+    // Публикуем canvas как track
+    __vb.outputStream = canvas.captureStream(__vb.targetFps);
+    var outTrack = __vb.outputStream.getVideoTracks()[0];
+    if (!outTrack) {
+        console.warn('[vb] no output track');
+        return null;
+    }
+
+    __vb.enabled = true;
+    __vb.rafId = requestAnimationFrame(vbRenderLoop);
+    console.log('[vb] started, mode=' + __vb.mode + ', blur=' + __vb.blurAmount);
+    return __vb.outputStream;
+}
+
+function vbStop() {
+    __vb.enabled = false;
+    __vb.initialized = false;
+    __vb.busy = false;
+    __vb.initResolve = null;
+    if (__vb.rafId) { cancelAnimationFrame(__vb.rafId); __vb.rafId = null; }
+    if (__vb.sourceVideo) {
+        try { __vb.sourceVideo.pause(); } catch (e) {}
+        try { __vb.sourceVideo.srcObject = null; } catch (e) {}
+        try { __vb.sourceVideo.remove(); } catch (e) {}
+        __vb.sourceVideo = null;
+    }
+    if (__vb.outputStream) {
+        __vb.outputStream.getTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+        __vb.outputStream = null;
+    }
+    __vb.canvas = null;
+    __vb.ctx = null;
+    console.log('[vb] stopped');
+}
+
+async function vbPrepareImage(url) {
+    return new Promise((resolve) => {
+        var img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            var c = document.createElement('canvas');
+            c.width = __vb.canvas ? __vb.canvas.width : 1280;
+            c.height = __vb.canvas ? __vb.canvas.height : 720;
+            var cx = c.getContext('2d');
+            // cover-fit
+            var cw = c.width, ch = c.height;
+            var iw = img.naturalWidth, ih = img.naturalHeight;
+            var r = Math.max(cw / iw, ch / ih);
+            var w2 = iw * r, h2 = ih * r;
+            cx.drawImage(img, (cw - w2) / 2, (ch - h2) / 2, w2, h2);
+            __vb.bgCanvas = c;
+            console.log('[vb] image ready:', url.slice(-30));
+            resolve(true);
+        };
+        img.onerror = () => {
+            console.warn('[vb] image load failed:', url);
+            __vb.bgCanvas = null;
+            resolve(false);
+        };
+        img.src = url;
+    });
+}
+
+function vbSetMode(mode) {
+    __vb.mode = mode;
+    console.log('[vb] mode =', mode);
+    if (mode === 'image' && !__vb.imageUrl) {
+        __vb.imageUrl = VB_PRESETS[0].url;
+    }
+    if (mode === 'image' && __vb.imageUrl && __vb.canvas) {
+        vbPrepareImage(__vb.imageUrl);
+    }
+}
+
+function vbSetBlur(amount) {
+    __vb.blurAmount = Math.max(2, Math.min(30, parseInt(amount, 10) || 10));
+    console.log('[vb] blur =', __vb.blurAmount);
+}
+
+function vbSetImage(url) {
+    __vb.imageUrl = url;
+    if (__vb.canvas && __vb.mode === 'image') vbPrepareImage(url);
+}
+
+function vbGetOutputTrack() {
+    if (!__vb.outputStream) return null;
+    var t = __vb.outputStream.getVideoTracks()[0];
+    return t || null;
+}
+
+// Пресеты — встроенные SVG-градиенты (data URL, не качаем)
+const VB_PRESETS = [
+    {
+        id: 'office',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#2a2a3e"/><stop offset="1" stop-color="#1a1a2a"/>' +
+            '</linearGradient></defs>' +
+            '<rect width="1280" height="720" fill="url(#g)"/>' +
+            '<rect x="100" y="200" width="200" height="300" fill="#3a3a55" rx="8"/>' +
+            '<rect x="980" y="180" width="200" height="350" fill="#3a3a55" rx="8"/>' +
+            '<rect x="120" y="240" width="160" height="20" fill="#a78bfa" opacity="0.4"/>' +
+            '<rect x="120" y="280" width="120" height="20" fill="#a78bfa" opacity="0.3"/>' +
+            '<rect x="1000" y="220" width="160" height="20" fill="#a78bfa" opacity="0.4"/>' +
+            '<circle cx="640" cy="100" r="60" fill="#7c3aed" opacity="0.3"/>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'library',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
+            '<rect width="1280" height="720" fill="#3d2817"/>' +
+            '<rect x="0" y="500" width="1280" height="220" fill="#2a1a0f"/>' +
+            '<rect x="60" y="100" width="80" height="400" fill="#8b5cf6"/>' +
+            '<rect x="150" y="120" width="60" height="380" fill="#ec4899"/>' +
+            '<rect x="220" y="100" width="80" height="400" fill="#f59e0b"/>' +
+            '<rect x="310" y="140" width="70" height="360" fill="#06b6d4"/>' +
+            '<rect x="400" y="110" width="60" height="390" fill="#84cc16"/>' +
+            '<rect x="850" y="100" width="80" height="400" fill="#8b5cf6"/>' +
+            '<rect x="940" y="130" width="60" height="370" fill="#f43f5e"/>' +
+            '<rect x="1010" y="100" width="80" height="400" fill="#f59e0b"/>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'nature',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
+            '<defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">' +
+            '<stop offset="0" stop-color="#87ceeb"/><stop offset="1" stop-color="#b0e0e6"/>' +
+            '</linearGradient></defs>' +
+            '<rect width="1280" height="720" fill="url(#sky)"/>' +
+            '<circle cx="1100" cy="120" r="80" fill="#fff9c4" opacity="0.9"/>' +
+            '<path d="M0 400 L150 250 L300 380 L450 220 L600 400 L750 280 L900 420 L1050 320 L1280 450 L1280 720 L0 720 Z" fill="#2d5a3d"/>' +
+            '<path d="M0 500 L200 400 L400 480 L600 380 L800 500 L1000 420 L1280 520 L1280 720 L0 720 Z" fill="#1e4d2b"/>' +
+            '</svg>'
+        )
+    },
+    {
+        id: 'gradient',
+        url: 'data:image/svg+xml;utf8,' + encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720">' +
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+            '<stop offset="0" stop-color="#667eea"/><stop offset="1" stop-color="#764ba2"/>' +
+            '</linearGradient></defs>' +
+            '<rect width="1280" height="720" fill="url(#g)"/>' +
+            '</svg>'
+        )
+    }
+];
+
+// Экспорт
+window.vbCheckSupport = vbCheckSupport;
+window.vbLoad = vbLoad;
+window.vbStart = vbStart;
+window.vbStop = vbStop;
+window.vbSetMode = vbSetMode;
+window.vbSetBlur = vbSetBlur;
+window.vbSetImage = vbSetImage;
+window.vbGetOutputTrack = vbGetOutputTrack;
+window.VB_PRESETS = VB_PRESETS;
+window.__vb = __vb;
+
+
 // ============ Emoji reactions ============
 var REACTIONS_TOPIC = 'vidma-reactions';
 var reactionsOpen = false;
