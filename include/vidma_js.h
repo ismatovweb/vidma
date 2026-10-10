@@ -2333,6 +2333,10 @@ function formatChatTime(ts) {
 function renderChatMessage(msg) {
     const box = document.getElementById('chat-messages');
     if (!box) return;
+
+    // Запоминаем позицию ДО вставки: скроллить вниз будем только если юзер был внизу
+    const __wasAtBottom = (box.scrollHeight - box.scrollTop - box.clientHeight) < 5;
+
     const empty = document.getElementById('chat-empty');
     if (empty) empty.remove();
 
@@ -2353,7 +2357,11 @@ function renderChatMessage(msg) {
         el.appendChild(t);
     }
     box.appendChild(el);
-    box.scrollTop = box.scrollHeight;
+
+    // Скроллим вниз ТОЛЬКО если юзер был внизу до этого сообщения
+    if (__wasAtBottom) {
+        box.scrollTop = box.scrollHeight;
+    }
 }
 
 function renderChatHistory(roomId) {
@@ -2369,6 +2377,9 @@ function renderChatHistory(roomId) {
         return;
     }
     msgs.forEach(renderChatMessage);
+
+    // При открытии чата — принудительно скроллим вниз (юзер ожидает видеть последнее)
+    requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
 }
 
 function appendChatMessage(from, text) {
@@ -3857,6 +3868,82 @@ window.i18nSetLang = i18nSetLang;
 window.i18nT = i18nT;
 window.toggleChatPanel = toggleChatPanel;
 window.handleChatSubmit = handleChatSubmit;
+
+// ============================================================
+// Chat scroll-to-bottom button
+// ============================================================
+function chatScrollToBottom() {
+    const el = document.getElementById('chat-messages');
+    const btn = document.getElementById('chat-scroll-btn');
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    if (btn) btn.classList.remove('has-new');
+}
+window.chatScrollToBottom = chatScrollToBottom;
+
+(function() {
+    function __initChatScroll() {
+        const el = document.getElementById('chat-messages');
+        const btn = document.getElementById('chat-scroll-btn');
+        if (!el || !btn) return false;
+
+        // Критерий "строго внизу" — 5px допуск. Если юзер отскроллил — не трогаем.
+        const NEAR = 5;
+        function isAtBottom() {
+            return (el.scrollHeight - el.scrollTop - el.clientHeight) < NEAR;
+        }
+
+        function __check() {
+            const atBottom = isAtBottom();
+            btn.classList.toggle('visible', !atBottom);
+            if (atBottom) btn.classList.remove('has-new');
+        }
+
+        el.addEventListener('scroll', __check, { passive: true });
+
+        // MutationObserver: новые сообщения
+        const mo = new MutationObserver(function(mutations) {
+            // ВАЖНО: проверяем isAtBottom() ДО того как браузер пересчитал высоту.
+            // Если юзер был внизу — авто-скролл. Если хоть на 5px вверх — не трогаем,
+            // показываем бейдж — юзер сам решит, читать ему или прыгнуть вниз.
+            const atBottom = isAtBottom();
+            let hasNewMsg = false;
+            mutations.forEach(m => {
+                m.addedNodes.forEach(n => {
+                    if (n.nodeType === 1 && n.classList && n.classList.contains('chat-msg')) {
+                        hasNewMsg = true;
+                    }
+                });
+            });
+
+            if (hasNewMsg) {
+                if (atBottom) {
+                    // мгновенный скролл — для юзера это выглядит как "ничего не произошло"
+                    el.scrollTop = el.scrollHeight;
+                } else {
+                    // юзер читает выше — показать бейдж
+                    btn.classList.add('has-new');
+                }
+            }
+            __check();
+        });
+        mo.observe(el, { childList: true, subtree: true });
+
+        // Первичная проверка
+        __check();
+        console.log('[chat] scroll-to-bottom initialized');
+        return true;
+    }
+
+    function tryInit() {
+        if (!__initChatScroll()) setTimeout(tryInit, 500);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tryInit);
+    } else {
+        tryInit();
+    }
+})();
 
 // Prevent double-tap zoom — CSS touch-action alone is not enough on iOS Safari
 (function() {

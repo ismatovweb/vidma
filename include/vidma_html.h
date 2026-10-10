@@ -2741,6 +2741,104 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
             line-height: 1.2;
             letter-spacing: -0.02em;
         }
+
+/* ============================================================
+   === Chat scroll — тонкий скроллбар + кнопка вниз ===
+   ============================================================ */
+#chat-messages {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(139,92,246,0.4) transparent;
+    scroll-behavior: smooth;
+}
+#chat-messages::-webkit-scrollbar { width: 6px; height: 6px; }
+#chat-messages::-webkit-scrollbar-track { background: transparent; }
+#chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(139,92,246,0.35);
+    border-radius: 3px;
+    transition: background 0.15s ease;
+}
+#chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(139,92,246,0.6);
+}
+#chat-messages::-webkit-scrollbar-corner { background: transparent; }
+
+#chat-scroll-btn {
+    position: absolute;
+    right: 14px;
+    bottom: 70px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(139,92,246,0.5), 0 2px 6px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(10px) scale(0.85);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease, background 0.15s ease;
+    z-index: 20;
+    padding: 0;
+}
+#chat-scroll-btn.visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+#chat-scroll-btn:hover { background: #7c3aed; }
+#chat-scroll-btn:active { transform: translateY(0) scale(0.92); }
+#chat-scroll-btn svg { width: 20px; height: 20px; }
+#chat-scroll-btn .badge-dot {
+    position: absolute;
+    top: -2px; right: -2px;
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ef4444;
+    border: 2px solid #8b5cf6;
+    display: none;
+}
+#chat-scroll-btn.has-new .badge-dot { display: block; }
+
+/* Send button — стильная круглая с самолётиком */
+#chat-form button[type="submit"],
+#chat-send {
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%);
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    box-shadow: 0 4px 14px rgba(139,92,246,0.4);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+#chat-send svg {
+    width: 20px;
+    height: 20px;
+    margin-left: -2px;
+    margin-top: 1px;
+}
+#chat-send:hover {
+    background: linear-gradient(135deg, #9b6ef7 0%, #7c3aed 100%);
+    box-shadow: 0 6px 20px rgba(139,92,246,0.6);
+}
+#chat-send:active {
+    transform: scale(0.92);
+}
+#chat-send:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    box-shadow: none;
+}
 </style>
     <script type="application/ld+json">
 [
@@ -3125,9 +3223,20 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
         <div id="chat-messages">
             <div id="chat-empty">История чата видна только вам и хранится в этом браузере.</div>
         </div>
+        <button id="chat-scroll-btn" type="button" onclick="chatScrollToBottom()" aria-label="Scroll to bottom">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+            </svg>
+            <span class="badge-dot"></span>
+        </button>
         <form id="chat-form" onsubmit="handleChatSubmit(event)">
             <input type="text" id="chat-input" placeholder="Message..." data-i18n-placeholder="chat.placeholder" data-i18n-placeholder="chat.placeholder" maxlength="500" autocomplete="off">
-            <button type="submit" id="chat-send">→</button>
+            <button type="submit" id="chat-send" aria-label="Send">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 2L11 13"/>
+                    <path d="M22 2L15 22l-4-9-9-4 20-7z"/>
+                </svg>
+            </button>
         </form>
     </div>
     
