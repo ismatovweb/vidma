@@ -454,7 +454,7 @@ button, a, [role="button"], .control-btn, .chat-reaction { touch-action: manipul
 
 /* Screen share tile — отдельная плитка, занимает 2 колонки */
 .remote-video-wrapper.screen-tile {
-    grid-column: span 2;
+    /* Обычная плитка в сетке, без span и order */
     aspect-ratio: 16 / 10;
 }
 .remote-video-wrapper.screen-tile video {
@@ -476,7 +476,6 @@ button, a, [role="button"], .control-btn, .chat-reaction { touch-action: manipul
         border-radius: 12px;
     }
     .remote-video-wrapper.screen-tile {
-        grid-column: span 1;
         aspect-ratio: 16 / 9;
     }
 }

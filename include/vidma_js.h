@@ -2188,7 +2188,6 @@ function attachParticipant(participant) {
         const wrapper = document.createElement('div');
         wrapper.id = 'remote-screen-' + id;
         wrapper.className = 'remote-video-wrapper screen-tile';
-        wrapper.style.order = '-1';
 
         const video = document.createElement('video');
         video.autoplay = true;
