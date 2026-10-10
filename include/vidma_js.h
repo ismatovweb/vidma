@@ -652,11 +652,22 @@ async function applyNoiseSuppression(stream) {
         } catch (e) {}
 
         __nrDest = __nrAudioCtx.createMediaStreamDestination();
+        // Стерео-выход: RNNoise отдаёт mono, дублируем в L+R
+        // чтобы звук шёл в оба наушника, а не только в левый
+        try {
+            __nrDest.channelCount = 2;
+            __nrDest.channelCountMode = 'explicit';
+            __nrDest.channelInterpretation = 'speakers';
+        } catch (e) {}
 
         // Нейтральный граф: RNNoise сам нормализует громкость
+        // node (mono) → ChannelMerger(2) → dest (stereo)
+        const merger = __nrAudioCtx.createChannelMerger(2);
         __nrSource.connect(node);
-        node.connect(__nrDest);
-        console.log('[noise] neutral graph');
+        node.connect(merger, 0, 0);  // mono → L
+        node.connect(merger, 0, 1);  // mono → R
+        merger.connect(__nrDest);
+        console.log('[noise] stereo graph: mono → L+R');
         // silentSink удалён: на iOS переключает audio session в playback
         // и глушит microphone. На Chrome/Android worklet работает и без него,
         // поскольку MediaStreamDestination уже в графе.
@@ -973,18 +984,51 @@ function lobbyToggleMic() {
     btn.classList.toggle('off', !lobbyState.micEnabled);
 }
 
-function lobbyToggleCam() {
+async function lobbyToggleCam() {
     if (!lobbyState.stream) return;
-    lobbyState.camEnabled = !lobbyState.camEnabled;
-    lobbyState.stream.getVideoTracks().forEach(t => t.enabled = lobbyState.camEnabled);
+    const newState = !lobbyState.camEnabled;
+    const vid = document.getElementById('lobby-video');
+
+    if (!newState) {
+        // ВЫКЛЮЧАЕМ: stop() → LED гаснет полностью
+        lobbyState.stream.getVideoTracks().forEach(t => {
+            try { t.stop(); } catch(e) {}
+            try { lobbyState.stream.removeTrack(t); } catch(e) {}
+        });
+        if (vid) vid.srcObject = null;
+        lobbyState.camEnabled = false;
+        console.log('[lobby] camera STOPPED, LED should be off');
+    } else {
+        // ВКЛЮЧАЕМ: свежий getUserMedia
+        try {
+            const savedCam = localStorage.getItem('vidma-cam-device');
+            const videoC = { width: { ideal: 1280 }, height: { ideal: 720 } };
+            if (savedCam) videoC.deviceId = { ideal: savedCam };
+            const newStream = await navigator.mediaDevices.getUserMedia({ video: videoC, audio: false });
+            const newTrack = newStream.getVideoTracks()[0];
+            if (!newTrack) throw new Error('no track');
+            lobbyState.stream.addTrack(newTrack);
+            lobbyState.camEnabled = true;
+            if (vid) { vid.srcObject = lobbyState.stream; try { await vid.play(); } catch(e) {} }
+            console.log('[lobby] camera STARTED');
+        } catch (e) {
+            console.warn('[lobby] camera re-enable failed', e);
+            if (typeof showToast === 'function') showToast(i18nT('camera.hint') || 'Camera unavailable');
+            return;
+        }
+    }
+
     const btn = document.getElementById('lobby-cam-toggle');
     const on = document.getElementById('lobby-cam-svg-on');
     const off = document.getElementById('lobby-cam-svg-off');
     if (on) on.style.display = lobbyState.camEnabled ? '' : 'none';
     if (off) off.style.display = lobbyState.camEnabled ? 'none' : '';
-    btn.classList.toggle('on', lobbyState.camEnabled);
-    btn.classList.toggle('off', !lobbyState.camEnabled);
-    document.getElementById('lobby-preview-box').classList.toggle('no-video', !lobbyState.camEnabled);
+    if (btn) {
+        btn.classList.toggle('on', lobbyState.camEnabled);
+        btn.classList.toggle('off', !lobbyState.camEnabled);
+    }
+    const pv = document.getElementById('lobby-preview-box');
+    if (pv) pv.classList.toggle('no-video', !lobbyState.camEnabled);
 }
 
 function cancelLobby() {
@@ -1042,7 +1086,9 @@ async function confirmLobbyEntry() {
     stopAudioLevelMeter();
     const stream = lobbyState.stream;
     if (stream) {
-        stream.getVideoTracks().forEach(t => t.enabled = lobbyState.camEnabled);
+        // Video: если камера выключена — треки уже stop()нуты в lobbyToggleCam (LED погашен).
+        // Enabled toggle на video-track НЕ гасит LED, поэтому не используем.
+        // Audio: enabled остаётся как быстрый toggle без остановки трека.
         stream.getAudioTracks().forEach(t => t.enabled = lobbyState.micEnabled);
     }
     document.getElementById('lobby-screen').classList.remove('active');
@@ -1188,12 +1234,13 @@ async function connectToRoom(preStream) {
 
     // 5. Publish tracks we already obtained in lobby
     if (preStream) {
-        for (const track of preStream.getVideoTracks()) {
+        if (lobbyState.camEnabled) for (const track of preStream.getVideoTracks()) {
             try {
                 const wantEnabled = lobbyState.camEnabled;
                 track.enabled = wantEnabled;
                 await room.localParticipant.publishTrack(track, {
                     source: Track.Source.Camera,
+                    stopOnMute: true,
                     simulcast: true,
                     videoEncoding: {
                         maxBitrate: 1_500_000,
@@ -1372,6 +1419,12 @@ function onLocalTrackUnpublished(publication) {
         }
         const lv = document.getElementById('local-video');
         if (lv) lv.srcObject = null;
+    }
+    // Screen share остановлен — сбрасываем кнопку
+    if (publication.source === Track.Source.ScreenShare) {
+        const btn = document.getElementById('toggle-screen');
+        if (btn) btn.classList.remove('active');
+        console.log('[screenShare] unpublish detected → button reset');
     }
 }
 
@@ -3680,22 +3733,42 @@ async function toggleCam() {
     const wasEnabled = room.localParticipant.isCameraEnabled;
     try {
         if (typeof __setDesired === 'function') __setDesired('cam', !wasEnabled);
-        await room.localParticipant.setCameraEnabled(!wasEnabled);
 
-        if (!wasEnabled) {
-            // При включении — переприкрепить локальное превью (SDK создал свежий трек)
-            await new Promise(r => setTimeout(r, 200));
+        if (wasEnabled) {
+            // ВЫКЛЮЧЕНИЕ: unpublishTrack(stop=true) — SDK сам остановит трек
+            // → камера отпускает устройство → LED гаснет
+            const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+            if (pub && pub.track) {
+                try {
+                    await room.localParticipant.unpublishTrack(pub.track, true);
+                    console.log('[toggleCam] ✓ unpublishTrack(stop=true) → LED off');
+                } catch (e) {
+                    console.warn('[toggleCam] unpublish failed, fallback setCameraEnabled(false):', e);
+                    await room.localParticipant.setCameraEnabled(false);
+                }
+            }
+            // Отвязываем video element
+            const lvOff = document.getElementById('local-video');
+            if (lvOff) { try { lvOff.srcObject = null; } catch(e) {} }
+        } else {
+            // ВКЛЮЧЕНИЕ: setCameraEnabled(true) создаёт свежий трек
+            await room.localParticipant.setCameraEnabled(true);
+            await new Promise(r => setTimeout(r, 300));
             const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
             const lv = document.getElementById('local-video');
-            if (pub && pub.videoTrack && lv) pub.videoTrack.attach(lv);
+            if (pub && pub.videoTrack && lv) {
+                pub.videoTrack.attach(lv);
+                try { await lv.play(); } catch(e) {}
+            }
+            console.log('[toggleCam] ✓ camera re-enabled, LED on');
         }
 
+        // UI
         const camOn = document.getElementById('cam-icon-on');
         const camOff = document.getElementById('cam-icon-off');
         if (camOn) camOn.style.display = wasEnabled ? 'none' : '';
         if (camOff) camOff.style.display = wasEnabled ? '' : 'none';
 
-        // Локальный аватар — показать при выключенной камере
         const localAv = document.getElementById('local-video-avatar');
         if (localAv) {
             if (wasEnabled) {
@@ -3717,17 +3790,58 @@ async function toggleScreenShare() {
     if (!room) return;
     const currently = room.localParticipant.isScreenShareEnabled;
     const btn = document.getElementById('toggle-screen');
+
     try {
-        await room.localParticipant.setScreenShareEnabled(!currently, {
-            videoEncoding: { maxBitrate: 2_500_000, maxFramerate: 30 },
-            audio: true
-        });
-        if (btn) btn.classList.toggle('active', !currently);
-        if (!currently && typeof plausibleTrack === 'function') plausibleTrack('screen_shared');
-        console.log('[toggleScreenShare]', { was: currently, now: !currently });
+        if (currently) {
+            // STOP — снимаем только screen-share треки, mic НЕ трогаем
+            const vPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare);
+            const aPub = room.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+            if (aPub && aPub.track) { try { await room.localParticipant.unpublishTrack(aPub.track, true); } catch(e) { console.warn('[screenShare] unpub audio', e); } }
+            if (vPub && vPub.track) { try { await room.localParticipant.unpublishTrack(vPub.track, true); } catch(e) { console.warn('[screenShare] unpub video', e); } }
+            if (btn) btn.classList.remove('active');
+            console.log('[screenShare] stopped by user');
+        } else {
+            // START — ручная публикация, изолированная от микрофона
+            const stream = await navigator.mediaDevices.getDisplayMedia({
+                video: { frameRate: 30 },
+                audio: true
+            });
+            const videoTrack = stream.getVideoTracks()[0];
+            const audioTrack = stream.getAudioTracks()[0];
+
+            if (!videoTrack) throw new Error('no video track from getDisplayMedia');
+
+            await room.localParticipant.publishTrack(videoTrack, {
+                source: Track.Source.ScreenShare,
+                videoEncoding: { maxBitrate: 2_500_000, maxFramerate: 30 }
+            });
+
+            if (audioTrack) {
+                await room.localParticipant.publishTrack(audioTrack, {
+                    source: Track.Source.ScreenShareAudio
+                });
+                console.log('[screenShare] audio track published');
+            }
+
+            // Обработка остановки из браузерной плашки ("Stop sharing")
+            videoTrack.addEventListener('ended', () => {
+                console.log('[screenShare] track ended by browser UI');
+                if (room && room.localParticipant.isScreenShareEnabled) {
+                    toggleScreenShare();
+                } else if (btn) {
+                    btn.classList.remove('active');
+                }
+            });
+
+            if (btn) btn.classList.add('active');
+            if (typeof plausibleTrack === 'function') plausibleTrack('screen_shared');
+            console.log('[screenShare] started, mic untouched');
+        }
     } catch (e) {
         console.warn('Screen share failed:', e);
-        alert('Не удалось начать трансляцию: ' + e.message);
+        if (btn) btn.classList.remove('active');
+        const msg = (e && e.message) ? e.message : String(e);
+        if (typeof showToast === 'function') showToast('Ошибка трансляции: ' + msg);
     }
 }
 
