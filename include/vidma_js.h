@@ -1205,6 +1205,12 @@ async function connectToRoom(preStream) {
             onLocalTrackUnpublished(pub);
             if (typeof onLocalTrackUnpublishedExtra === 'function') onLocalTrackUnpublishedExtra(pub);
         })
+        .on(RoomEvent.TrackMuted, function(pub, participant) {
+            if (pub && pub.source === Track.Source.Microphone) updateMuteIcon(participant);
+        })
+        .on(RoomEvent.TrackUnmuted, function(pub, participant) {
+            if (pub && pub.source === Track.Source.Microphone) updateMuteIcon(participant);
+        })
         .on(RoomEvent.DataReceived, onDataReceived)
         .on(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged)
         .on(RoomEvent.SignalReconnecting, function() {
@@ -2099,6 +2105,54 @@ document.addEventListener('click', (e) => {
 window.setVolumeFor = setVolumeFor;
 window.getVolumeFor = getVolumeFor;
 
+// ============ MUTE INDICATOR ============
+const MUTE_ICON_SVG = '<svg viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>';
+
+function makeMuteIcon() {
+    const ic = document.createElement('div');
+    ic.className = 'tile-mute-icon';
+    ic.innerHTML = MUTE_ICON_SVG;
+    return ic;
+}
+
+function updateMuteIcon(participant) {
+    if (!participant) return;
+    const isLocal = (typeof room !== 'undefined' && room && participant === room.localParticipant);
+    let icon = null;
+    if (isLocal) {
+        icon = document.getElementById('local-mute-icon');
+    } else {
+        const id = participant.identity;
+        const panel = remotePanels.get(id);
+        if (panel && panel.wrapperEl) {
+            icon = panel.wrapperEl.querySelector('.tile-mute-icon');
+        }
+    }
+    if (!icon) return;
+    const muted = !participant.isMicrophoneEnabled;
+    icon.classList.toggle('visible', muted);
+    console.log('[mute-icon]', participant.identity.slice(0,6), muted ? 'MUTED' : 'unmuted');
+}
+window.updateMuteIcon = updateMuteIcon;
+
+(function initLocalMuteIcon() {
+    function add() {
+        const lc = document.getElementById('local-video-container');
+        if (!lc) { setTimeout(add, 400); return; }
+        if (!lc.querySelector('.tile-mute-icon')) {
+            const ic = makeMuteIcon();
+            ic.id = 'local-mute-icon';
+            lc.appendChild(ic);
+            console.log('[mute-icon] local PiP icon added');
+        }
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(add, 100));
+    } else {
+        setTimeout(add, 100);
+    }
+})();
+
 function attachParticipant(participant) {
     const id = participant.identity;
     const displayName = participant.name || id.slice(0, 6);
@@ -2128,6 +2182,10 @@ function attachParticipant(participant) {
         av.className = 'video-avatar';
         av.innerHTML = '<div class="avatar-circle"></div>';
         renderAvatarInto(av, participant.name || '', isGuestName(participant.name));
+
+        // Mute icon (показывается при выключенном микрофоне)
+        const muteIcon = makeMuteIcon();
+        wrapper.appendChild(muteIcon);
 
         wrapper.appendChild(av);
         wrapper.appendChild(video);
@@ -2237,6 +2295,9 @@ function attachParticipant(participant) {
 
     // Avatar виден только если камеры нет
     setAvatarVisible(camPanel.wrapperEl, !hasCamera);
+
+    // Обновить значок mute для этого участника
+    try { updateMuteIcon(participant); } catch (e) { console.warn('[mute-icon] update failed', e); }
 
     if (participant.name && participant.name.trim()) camPanel.name = participant.name;
     const nameForAvatar = camPanel.name || participant.name || '';
@@ -3736,7 +3797,8 @@ async function toggleMic() {
     } catch (e) {
         console.warn('toggleMic failed', e);
     }
-}
+        try { updateMuteIcon(room.localParticipant); } catch(e) {}
+    }
 
 async function toggleCam() {
     if (!room) return;

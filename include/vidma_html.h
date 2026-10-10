@@ -2839,6 +2839,48 @@ body.chat-open #toggle-bars-btn { right: calc(340px + 12px); }
     cursor: not-allowed;
     box-shadow: none;
 }
+
+/* ============================================================
+   === Mute indicator — красный значок на плитках ===
+   ============================================================ */
+.tile-mute-icon {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.95);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.55), 0 0 0 1.5px rgba(255,255,255,0.15);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.tile-mute-icon.visible { display: flex; }
+.tile-mute-icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: #fff;
+    fill: none;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+/* Local PiP — компактнее */
+#local-video-container .tile-mute-icon {
+    width: 24px;
+    height: 24px;
+    bottom: 6px;
+    right: 6px;
+}
+#local-video-container .tile-mute-icon svg {
+    width: 13px;
+    height: 13px;
+}
 </style>
     <script type="application/ld+json">
 [
