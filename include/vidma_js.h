@@ -2013,12 +2013,25 @@ function detachVolume(id) {
     console.log('[volume] chain removed for', id.slice(0,6));
 }
 
+// Найти ВСЕ узлы volume для участника (mic + screen + fallback)
+function __findVolNodes(id) {
+    var out = [];
+    var keys = [id, id + ':mic', id + ':screen', id + ':audio'];
+    for (var i = 0; i < keys.length; i++) {
+        var n = __volNodes.get(keys[i]);
+        if (n && n.gain) out.push(n);
+    }
+    return out;
+}
+
 function applyVolume(id, pct) {
     pct = Math.max(0, Math.min(200, pct));
     const gainValue = pct / 100;
-    const n = __volNodes.get(id);
-    if (n) n.gain.gain.value = gainValue;
-    console.log('[volume]', id.slice(0,6), '=', pct + '%', 'gain=' + gainValue.toFixed(2));
+    const nodes = __findVolNodes(id);
+    for (let i = 0; i < nodes.length; i++) {
+        try { nodes[i].gain.gain.value = gainValue; } catch (e) {}
+    }
+    console.log('[volume]', String(id).slice(0,6), '=', pct + '%', 'gain=' + gainValue.toFixed(2), '| nodes=' + nodes.length);
 }
 
 function setVolumeFor(id, pct) {
